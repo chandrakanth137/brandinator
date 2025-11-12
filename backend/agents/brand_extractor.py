@@ -126,15 +126,18 @@ class BrandExtractionAgent:
         prompt = self._create_extraction_prompt(context)
         
         if self.llm:
-            # Use real LLM
+            # Use real LLM for intelligent analysis
             try:
+                print("Using LLM to analyze and infer brand identity...")
                 response = self.llm.invoke([HumanMessage(content=prompt)])
                 brand_json = self._parse_llm_response(response.content)
+                print("✓ Brand identity extracted successfully with LLM")
             except Exception as e:
-                print(f"LLM error: {e}, using fallback")
+                print(f"LLM error: {e}, using enhanced fallback")
                 brand_json = self._fallback_extraction(context)
         else:
-            # Use fallback extraction
+            # Use enhanced fallback extraction
+            print("LLM not available, using rule-based extraction...")
             brand_json = self._fallback_extraction(context)
         
         return brand_json
