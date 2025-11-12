@@ -73,27 +73,27 @@ class BrandExtractionAgent:
         if GOOGLE_AVAILABLE:
             api_key = os.getenv('GEMINI_ANALYSIS_API_KEY', '') or os.getenv('GEMINI_API_KEY', '') or os.getenv('GOOGLE_API_KEY', '')
             if api_key:
-                try:
-                    llm = ChatGoogleGenerativeAI(
-                        model="gemini-1.5-flash-latest",  # Use latest version
-                        temperature=0.7,
-                        google_api_key=api_key
-                    )
-                    print("✓ Google Gemini LLM initialized successfully")
-                    return llm
-                except Exception as e:
-                    print(f"⚠ Google Gemini LLM failed: {e}")
-                    # Try alternative model name
+                # Try different model name formats
+                model_names = [
+                    "gemini-1.5-flash",  # Standard format
+                    "gemini-1.5-pro",    # Pro version
+                    "gemini-pro",        # Legacy format
+                    "models/gemini-1.5-flash",  # With models/ prefix
+                ]
+                
+                for model_name in model_names:
                     try:
                         llm = ChatGoogleGenerativeAI(
-                            model="gemini-pro",
+                            model=model_name,
                             temperature=0.7,
                             google_api_key=api_key
                         )
-                        print("✓ Google Gemini LLM (gemini-pro) initialized successfully")
+                        print(f"✓ Google Gemini LLM ({model_name}) initialized successfully")
                         return llm
-                    except:
-                        pass
+                    except Exception as e:
+                        if model_name == model_names[-1]:  # Last attempt
+                            print(f"⚠ Google Gemini LLM failed with all model names: {e}")
+                        continue
         
         # Try Ollama (local, free, no API key needed)
         if OLLAMA_AVAILABLE:
@@ -123,26 +123,25 @@ class BrandExtractionAgent:
             if GOOGLE_AVAILABLE:
                 api_key = os.getenv('GEMINI_ANALYSIS_API_KEY', '') or os.getenv('GEMINI_API_KEY', '') or os.getenv('GOOGLE_API_KEY', '')
                 if api_key:
-                    try:
-                        llm = ChatGoogleGenerativeAI(
-                            model="gemini-1.5-flash-latest",
-                            temperature=0.7,
-                            google_api_key=api_key
-                        )
-                        print("✓ Switched to Google Gemini LLM")
-                        return llm
-                    except:
-                        # Try alternative model
+                    # Try different model name formats
+                    model_names = [
+                        "gemini-1.5-flash",
+                        "gemini-1.5-pro",
+                        "gemini-pro",
+                        "models/gemini-1.5-flash",
+                    ]
+                    
+                    for model_name in model_names:
                         try:
                             llm = ChatGoogleGenerativeAI(
-                                model="gemini-pro",
+                                model=model_name,
                                 temperature=0.7,
                                 google_api_key=api_key
                             )
-                            print("✓ Switched to Google Gemini LLM (gemini-pro)")
+                            print(f"✓ Switched to Google Gemini LLM ({model_name})")
                             return llm
                         except:
-                            pass
+                            continue
         
         # Try Ollama as last resort
         if OLLAMA_AVAILABLE:
