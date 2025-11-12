@@ -1,4 +1,4 @@
-"""Image generation service using Vertex AI Imagen."""
+"""Image generation service using Gemini 2.5 Flash (Nano Banana)."""
 import os
 import base64
 from typing import Optional
@@ -10,92 +10,57 @@ from dotenv import load_dotenv
 load_dotenv()
 
 try:
-    # Vertex AI Imagen library (using stable version, not preview)
-    import vertexai
-    from vertexai.vision_models import ImageGenerationModel
-except ImportError as e:
-    # If stable version not available, try preview version as fallback
-    try:
-        from vertexai.preview.vision_models import ImageGenerationModel
-    except ImportError:
-        vertexai = None
-        ImageGenerationModel = None
+    import google.generativeai as genai
+except ImportError:
+    genai = None
 
 from backend.app.models import BrandIdentity
 from backend.app.logger import logger
 
 
 class ImageGenerator:
-    """Generate on-brand images using Vertex AI Imagen."""
+    """Generate on-brand images using Gemini 2.5 Flash image generation."""
     
     def __init__(self):
-        # Vertex AI requires a Project ID and Location
-        self.project_id = os.getenv('GOOGLE_PROJECT_ID')
-        self.location = os.getenv('GOOGLE_LOCATION', 'us-central1')  # e.g., 'us-central1'
+        # Use Gemini API key (simpler than Vertex AI)
+        api_key = os.getenv('GEMINI_IMAGE_API_KEY', '') or os.getenv('GEMINI_API_KEY', '') or os.getenv('GOOGLE_API_KEY', '')
         
         # Create downloads directory
         self.downloads_dir = Path("generated_images")
         self.downloads_dir.mkdir(exist_ok=True)
         logger.info(f"Images will be saved to: {self.downloads_dir.absolute()}")
         
-        if self.project_id and vertexai and ImageGenerationModel:
+        if api_key and genai:
             try:
-                logger.info(f"Initializing Vertex AI with project: {self.project_id}, location: {self.location}")
-                # Initialize Vertex AI
-                vertexai.init(project=self.project_id, location=self.location)
+                # Configure Gemini API
+                genai.configure(api_key=api_key)
                 
-                logger.info("Loading Imagen model: imagegeneration@006")
-                # Load the pre-trained Imagen model
-                self.model = ImageGenerationModel.from_pretrained("imagegeneration@006")
+                # Initialize Gemini 2.5 Flash model with image generation capability
+                self.model = genai.GenerativeModel(
+                    model_name='gemini-2.5-flash-image',
+                    generation_config={
+                        'response_modalities': ['IMAGE']  # Only generate images
+                    }
+                )
                 
                 self.enabled = True
-                logger.info("✓ Vertex AI Imagen generation enabled successfully")
+                logger.info("✓ Gemini 2.5 Flash image generation enabled (Nano Banana)")
             except Exception as e:
-                error_str = str(e)
-                logger.error(f"✗ Error initializing Vertex AI: {error_str}", exc_info=True)
-                
-                # Provide specific guidance based on error type
-                if "credentials were not found" in error_str or "DefaultCredentialsError" in error_str:
-                    logger.error("=" * 60)
-                    logger.error("AUTHENTICATION REQUIRED")
-                    logger.error("=" * 60)
-                    logger.error("Run this command to authenticate:")
-                    logger.error("  gcloud auth application-default login")
-                    logger.error("")
-                    logger.error("This will open a browser to sign in with your Google account.")
-                    logger.error("Make sure you use the same account that has access to project: " + str(self.project_id))
-                    logger.error("=" * 60)
-                elif "SERVICE_DISABLED" in error_str or "quota project" in error_str.lower():
-                    logger.error("=" * 60)
-                    logger.error("QUOTA PROJECT & API ENABLING REQUIRED")
-                    logger.error("=" * 60)
-                    logger.error("Two issues detected:")
-                    logger.error("")
-                    logger.error("1. QUOTA PROJECT NOT SET:")
-                    logger.error(f"   Run: gcloud auth application-default set-quota-project {self.project_id}")
-                    logger.error("")
-                    logger.error("2. VERTEX AI API NOT ENABLED:")
-                    logger.error("   The Vertex AI API must be enabled in Google Cloud Console:")
-                    logger.error("   - Go to: https://console.cloud.google.com/apis/library/aiplatform.googleapis.com")
-                    logger.error(f"   - Select project: {self.project_id}")
-                    logger.error("   - Click 'Enable'")
-                    logger.error("")
-                    logger.error("After enabling the API, restart your backend server.")
-                    logger.error("=" * 60)
-                else:
-                    logger.error("Common issues:")
-                    logger.error("  1. Vertex AI API not enabled in Google Cloud Console")
-                    logger.error("  2. Billing not enabled for the project")
-                    logger.error("  3. Authentication failed - run: gcloud auth application-default login")
-                    logger.error("  4. Missing IAM permissions - need 'Vertex AI User' role")
-                    logger.error("  5. Quota project not set - run: gcloud auth application-default set-quota-project PROJECT_ID")
+                logger.error(f"✗ Error initializing Gemini: {e}", exc_info=True)
+                logger.error("=" * 60)
+                logger.error("GEMINI API KEY ISSUE")
+                logger.error("=" * 60)
+                logger.error("Set GEMINI_IMAGE_API_KEY or GEMINI_API_KEY in your .env file")
+                logger.error("Get a key from: https://aistudio.google.com/app/apikey")
+                logger.error("=" * 60)
                 self.enabled = False
         else:
             self.enabled = False
-            if not self.project_id:
-                logger.warning("GOOGLE_PROJECT_ID not found in environment variables, image generation will be mocked")
-            if not vertexai:
-                logger.warning("vertexai library not found, image generation will be mocked")
+            if not api_key:
+                logger.warning("GEMINI_IMAGE_API_KEY not found, image generation will be mocked")
+                logger.warning("Get a key from: https://aistudio.google.com/app/apikey")
+            if not genai:
+                logger.warning("google-generativeai library not found, image generation will be mocked")
     
     def generate(
         self,
@@ -109,51 +74,81 @@ class ImageGenerator:
         
         if self.enabled:
             try:
-                logger.info(f"Generating image with prompt: {style_prompt[:500]}...")
+                logger.info(f"Generating image with Gemini 2.5 Flash...")
+                logger.info(f"Prompt: {style_prompt[:200]}...")
                 logger.debug(f"Full prompt: {style_prompt}")
                 
-                # Use Vertex AI Imagen to generate images
-                response = self.model.generate_images(
-                    prompt=style_prompt,
-                    number_of_images=1,
-                    # Optional parameters:
-                    # aspect_ratio="1:1",
-                    # safety_filter_level="block_few",
-                )
+                # Generate image using Gemini
+                response = self.model.generate_content(style_prompt)
                 
                 # Process the response to extract image data
-                if response.images:
-                    # Get the raw image bytes from the first image
-                    image_bytes = response.images[0]._image_bytes
-                    
-                    logger.info(f"Successfully generated image: {len(image_bytes)} bytes")
-                    
-                    # Save the image locally
-                    file_path = self._save_image(image_bytes, "image/png")
-                    logger.info(f"Image saved to: {file_path}")
-                    
-                    # Convert bytes to base64 data URL to send to frontend
-                    image_data_b64 = base64.b64encode(image_bytes).decode('ascii')
-                    data_url = f"data:image/png;base64,{image_data_b64}"
-                    
-                    logger.info("Image generated successfully")
-                    return data_url
+                image_url = self._process_response(response)
+                if image_url:
+                    logger.info("✓ Image generated successfully")
+                    return image_url
                 else:
-                    logger.warning("API response did not contain images, using mock")
-                    logger.debug(f"Raw API response: {response}")
+                    logger.warning("Could not extract image from response, using mock")
                     return self._mock_generate(style_prompt)
             
             except Exception as e:
                 logger.error(f"✗ Error generating image: {e}", exc_info=True)
-                logger.error("This error occurred during image generation. Check:")
-                logger.error("  1. Vertex AI API is enabled")
-                logger.error("  2. Billing is enabled")
-                logger.error("  3. Authentication is valid: gcloud auth application-default login")
-                logger.error("  4. IAM permissions include 'Vertex AI User' role")
+                logger.error("Check:")
+                logger.error("  1. API key is valid")
+                logger.error("  2. Model name is correct (gemini-2.5-flash-image)")
+                logger.error("  3. Prompt is appropriate (no blocked content)")
                 return self._mock_generate(style_prompt)
         else:
             # Return mock image URL
             return self._mock_generate(style_prompt)
+    
+    def _process_response(self, response) -> Optional[str]:
+        """Process the Gemini API response to extract image data."""
+        try:
+            # Check if response has candidates
+            if hasattr(response, 'candidates') and response.candidates:
+                candidate = response.candidates[0]
+                logger.debug(f"Processing candidate: {type(candidate)}")
+                
+                # Check for content parts
+                if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+                    logger.debug(f"Found {len(candidate.content.parts)} parts in content")
+                    
+                    for idx, part in enumerate(candidate.content.parts):
+                        logger.debug(f"Part {idx}: {type(part)}")
+                        
+                        # Check if part contains image data
+                        if hasattr(part, 'inline_data'):
+                            inline_data = part.inline_data
+                            logger.debug(f"Found inline_data: {type(inline_data)}")
+                            
+                            if hasattr(inline_data, 'data'):
+                                image_data = inline_data.data
+                                mime_type = getattr(inline_data, 'mime_type', 'image/png')
+                                
+                                logger.info(f"Extracted image data: {len(image_data)} bytes, type: {mime_type}")
+                                
+                                # If data is bytes, convert to base64
+                                if isinstance(image_data, bytes):
+                                    image_bytes = image_data
+                                    image_data_b64 = base64.b64encode(image_bytes).decode('ascii')
+                                else:
+                                    # Already base64
+                                    image_data_b64 = image_data
+                                    image_bytes = base64.b64decode(image_data_b64)
+                                
+                                # Save image locally
+                                file_path = self._save_image(image_bytes, mime_type)
+                                logger.info(f"Image saved to: {file_path}")
+                                
+                                # Return as data URL
+                                return f"data:{mime_type};base64,{image_data_b64}"
+            
+            logger.warning("No image data found in response")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error processing response: {e}", exc_info=True)
+            return None
     
     def _build_style_prompt(
         self,
