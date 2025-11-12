@@ -79,8 +79,22 @@ brandinator/
 
    - `OPENAI_API_KEY`: For LangChain agent (optional, has fallback)
    - `GEMINI_ANALYSIS_API_KEY`: For brand analysis using Google Gemini (optional, has fallback)
-   - `GEMINI_IMAGE_API_KEY`: For image generation using Gemini Nano Banana (optional, mocked if not available)
    - `GEMINI_API_KEY`: Fallback if specific keys not set (optional)
+   - `GOOGLE_PROJECT_ID`: Your Google Cloud Project ID (required for image generation)
+   - `GOOGLE_LOCATION`: Vertex AI region (default: `us-central1`, optional)
+
+   **For Image Generation (Vertex AI Imagen)**:
+
+   You need to:
+
+   1. Create a Google Cloud Project
+   2. Enable the Vertex AI API in your project
+   3. Set up authentication:
+      ```bash
+      # Install gcloud CLI: https://cloud.google.com/sdk/docs/install
+      gcloud auth application-default login
+      ```
+   4. Set `GOOGLE_PROJECT_ID` in your `.env` file
 
    **Install Playwright browsers** (required for web scraping and Google search):
 
