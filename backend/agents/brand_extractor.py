@@ -2,11 +2,8 @@
 import json
 import os
 from typing import Dict, Any, List
-from langchain.agents import AgentExecutor, create_structured_chat_agent
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai import ChatOpenAI
-from langchain.tools import Tool
-from langchain.schema import SystemMessage, HumanMessage
+from langchain_core.messages import HumanMessage
 from dotenv import load_dotenv
 
 # Load environment variables
