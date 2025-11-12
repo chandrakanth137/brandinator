@@ -12,6 +12,7 @@ wheels/
 # Environment variables
 .env
 uv.lock
+.env.example
 
 # IDE
 .vscode/
