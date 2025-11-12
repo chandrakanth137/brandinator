@@ -13,31 +13,144 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+# Try to import Playwright
+try:
+    from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    PLAYWRIGHT_AVAILABLE = False
+    print("Playwright not available, falling back to BeautifulSoup only")
+
 
 class WebScraper:
-    """Web scraper using BeautifulSoup."""
+    """Web scraper using Playwright with BeautifulSoup fallback."""
     
     def __init__(self):
+        self.use_playwright = PLAYWRIGHT_AVAILABLE
+        self.playwright = None
+        self.browser = None
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         })
+        
+        if self.use_playwright:
+            try:
+                self.playwright = sync_playwright().start()
+                self.browser = self.playwright.chromium.launch(headless=True)
+                print("Playwright initialized successfully")
+            except Exception as e:
+                print(f"Failed to initialize Playwright: {e}, falling back to BeautifulSoup")
+                self.use_playwright = False
+    
+    def __del__(self):
+        """Cleanup Playwright resources."""
+        if self.browser:
+            try:
+                self.browser.close()
+            except:
+                pass
+        if self.playwright:
+            try:
+                self.playwright.stop()
+            except:
+                pass
     
     def scrape(self, url: str) -> Dict[str, Any]:
         """Scrape a website and extract text content, images, and metadata."""
+        if self.use_playwright:
+            try:
+                return self._scrape_with_playwright(url)
+            except Exception as e:
+                print(f"Playwright scraping failed: {e}, falling back to BeautifulSoup")
+                return self._scrape_with_bs4(url)
+        else:
+            return self._scrape_with_bs4(url)
+    
+    def _scrape_with_playwright(self, url: str) -> Dict[str, Any]:
+        """Scrape using Playwright (handles JavaScript-rendered content)."""
+        page = self.browser.new_page()
+        try:
+            # Navigate to the page
+            page.goto(url, wait_until='networkidle', timeout=30000)
+            
+            # Wait a bit for dynamic content
+            page.wait_for_timeout(2000)
+            
+            # Get page content
+            html = page.content()
+            soup = BeautifulSoup(html, 'html.parser')
+            
+            # Extract title
+            title = page.title()
+            title_text = title.strip() if title else ""
+            
+            # Extract meta description
+            meta_desc = soup.find('meta', attrs={'name': 'description'})
+            if not meta_desc:
+                meta_desc = soup.find('meta', attrs={'property': 'og:description'})
+            description = meta_desc.get('content', '') if meta_desc else ""
+            
+            # Extract text content
+            for script in soup(["script", "style"]):
+                script.decompose()
+            
+            text = soup.get_text()
+            lines = (line.strip() for line in text.splitlines())
+            chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+            text = ' '.join(chunk for chunk in chunks if chunk)
+            
+            # Extract images
+            images = []
+            img_elements = page.query_selector_all('img')
+            for img in img_elements[:20]:
+                try:
+                    src = img.get_attribute('src') or img.get_attribute('data-src')
+                    alt = img.get_attribute('alt') or ''
+                    if src:
+                        if not src.startswith('http'):
+                            src = urljoin(url, src)
+                        images.append({'url': src, 'alt': alt})
+                except:
+                    continue
+            
+            # Extract links
+            links = []
+            link_elements = page.query_selector_all('a[href]')
+            for link in link_elements[:50]:
+                try:
+                    href = link.get_attribute('href')
+                    if href:
+                        if not href.startswith('http'):
+                            href = urljoin(url, href)
+                        if urlparse(href).netloc == urlparse(url).netloc:
+                            links.append(href)
+                except:
+                    continue
+            
+            return {
+                'url': url,
+                'title': title_text,
+                'description': description,
+                'text': text[:5000],
+                'images': images[:20],
+                'links': list(set(links))[:10]
+            }
+        finally:
+            page.close()
+    
+    def _scrape_with_bs4(self, url: str) -> Dict[str, Any]:
+        """Scrape using BeautifulSoup (fallback for static content)."""
         try:
             response = self.session.get(url, timeout=10)
             response.raise_for_status()
             soup = BeautifulSoup(response.content, 'html.parser')
             
             # Extract text content
-            # Remove script and style elements
             for script in soup(["script", "style"]):
                 script.decompose()
             
-            # Get text
             text = soup.get_text()
-            # Clean up text
             lines = (line.strip() for line in text.splitlines())
             chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
             text = ' '.join(chunk for chunk in chunks if chunk)
@@ -48,19 +161,21 @@ class WebScraper:
             
             # Extract meta description
             meta_desc = soup.find('meta', attrs={'name': 'description'})
+            if not meta_desc:
+                meta_desc = soup.find('meta', attrs={'property': 'og:description'})
             description = meta_desc.get('content', '') if meta_desc else ""
             
             # Extract images
             images = []
             for img in soup.find_all('img', src=True):
-                img_url = img['src']
-                # Convert relative URLs to absolute
-                if not img_url.startswith('http'):
-                    img_url = urljoin(url, img_url)
-                images.append({
-                    'url': img_url,
-                    'alt': img.get('alt', '')
-                })
+                img_url = img.get('src') or img.get('data-src')
+                if img_url:
+                    if not img_url.startswith('http'):
+                        img_url = urljoin(url, img_url)
+                    images.append({
+                        'url': img_url,
+                        'alt': img.get('alt', '')
+                    })
             
             # Extract links
             links = []
@@ -68,7 +183,6 @@ class WebScraper:
                 href = link['href']
                 if not href.startswith('http'):
                     href = urljoin(url, href)
-                # Only include links from same domain
                 if urlparse(href).netloc == urlparse(url).netloc:
                     links.append(href)
             
@@ -76,9 +190,9 @@ class WebScraper:
                 'url': url,
                 'title': title_text,
                 'description': description,
-                'text': text[:5000],  # Limit text length
-                'images': images[:20],  # Limit number of images
-                'links': list(set(links))[:10]  # Limit and deduplicate links
+                'text': text[:5000],
+                'images': images[:20],
+                'links': list(set(links))[:10]
             }
         except Exception as e:
             return {
@@ -91,53 +205,153 @@ class WebScraper:
 
 
 class GoogleSearchTool:
-    """Google Search tool for supplementing brand info."""
+    """Google Search tool using Playwright (no API key needed)."""
     
-    def __init__(self, api_key: Optional[str] = None, search_engine_id: Optional[str] = None):
-        self.api_key = api_key or os.getenv('GOOGLE_API_KEY', '')
-        self.search_engine_id = search_engine_id or os.getenv('GOOGLE_SEARCH_ENGINE_ID', '')
+    def __init__(self):
+        self.use_playwright = PLAYWRIGHT_AVAILABLE
+        self.playwright = None
+        self.browser = None
+        
+        if self.use_playwright:
+            try:
+                self.playwright = sync_playwright().start()
+                self.browser = self.playwright.chromium.launch(headless=True)
+                print("GoogleSearchTool: Playwright initialized")
+            except Exception as e:
+                print(f"GoogleSearchTool: Failed to initialize Playwright: {e}")
+                self.use_playwright = False
+    
+    def __del__(self):
+        """Cleanup Playwright resources."""
+        if self.browser:
+            try:
+                self.browser.close()
+            except:
+                pass
+        if self.playwright:
+            try:
+                self.playwright.stop()
+            except:
+                pass
     
     def search(self, query: str, num_results: int = 5) -> List[Dict[str, str]]:
-        """Search Google and return results."""
-        if not self.api_key or not self.search_engine_id:
-            # Return mock results if API keys not configured
+        """Search Google using Playwright and return results."""
+        if not self.use_playwright:
+            # Fallback to mock results if Playwright not available
             return [
                 {
-                    'title': f'Mock result for: {query}',
-                    'snippet': f'This is a mock search result for the query: {query}',
+                    'title': f'Search result for: {query}',
+                    'snippet': f'Playwright not available. Install with: playwright install chromium',
                     'link': 'https://example.com'
                 }
             ]
         
         try:
-            url = "https://www.googleapis.com/customsearch/v1"
-            params = {
-                'key': self.api_key,
-                'cx': self.search_engine_id,
-                'q': query,
-                'num': num_results
-            }
-            response = requests.get(url, params=params, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            
-            results = []
-            for item in data.get('items', [])[:num_results]:
-                results.append({
-                    'title': item.get('title', ''),
-                    'snippet': item.get('snippet', ''),
-                    'link': item.get('link', '')
-                })
-            return results
+            return self._search_with_playwright(query, num_results)
         except Exception as e:
-            # Fallback to mock results on error
+            print(f"Google search failed: {e}")
+            # Return mock results on error
             return [
                 {
                     'title': f'Search result for: {query}',
-                    'snippet': f'Error occurred: {str(e)}',
+                    'snippet': f'Search failed: {str(e)}',
                     'link': 'https://example.com'
                 }
             ]
+    
+    def _search_with_playwright(self, query: str, num_results: int) -> List[Dict[str, str]]:
+        """Perform Google search using Playwright."""
+        page = self.browser.new_page()
+        results = []
+        
+        try:
+            # Navigate to Google Search
+            search_url = f"https://www.google.com/search?q={query.replace(' ', '+')}"
+            page.goto(search_url, wait_until='networkidle', timeout=30000)
+            
+            # Wait for search results to load
+            page.wait_for_timeout(2000)
+            
+            # Try to handle cookie consent if present
+            try:
+                accept_button = page.query_selector('button:has-text("Accept"), button:has-text("I agree"), #L2AGLb')
+                if accept_button:
+                    accept_button.click()
+                    page.wait_for_timeout(1000)
+            except:
+                pass
+            
+            # Extract search results
+            # Google search results are in divs with class 'g' or 'tF2Cxc'
+            result_selectors = [
+                'div.g',
+                'div.tF2Cxc',
+                'div[data-ved]'
+            ]
+            
+            result_elements = []
+            for selector in result_selectors:
+                elements = page.query_selector_all(selector)
+                if elements:
+                    result_elements = elements[:num_results]
+                    break
+            
+            for element in result_elements:
+                try:
+                    # Extract title (usually in h3)
+                    title_elem = element.query_selector('h3')
+                    title = title_elem.inner_text() if title_elem else ""
+                    
+                    # Extract link (usually in a tag)
+                    link_elem = element.query_selector('a[href]')
+                    link = link_elem.get_attribute('href') if link_elem else ""
+                    
+                    # Extract snippet (usually in span with class 'aCOpRe' or similar)
+                    snippet_elem = element.query_selector('span.aCOpRe, span.VwiC3b, div.VwiC3b')
+                    snippet = snippet_elem.inner_text() if snippet_elem else ""
+                    
+                    if title and link:
+                        # Clean up Google redirect URLs
+                        if link.startswith('/url?q='):
+                            from urllib.parse import parse_qs, urlparse
+                            parsed = urlparse(link)
+                            link = parse_qs(parsed.query).get('q', [link])[0]
+                        
+                        results.append({
+                            'title': title,
+                            'snippet': snippet,
+                            'link': link
+                        })
+                        
+                        if len(results) >= num_results:
+                            break
+                except Exception as e:
+                    continue
+            
+            # If we didn't get enough results, try alternative selectors
+            if len(results) < num_results:
+                # Try getting all links from the page
+                all_links = page.query_selector_all('a[href]')
+                for link_elem in all_links:
+                    if len(results) >= num_results:
+                        break
+                    try:
+                        href = link_elem.get_attribute('href')
+                        if href and ('http' in href) and ('google.com' not in href):
+                            title = link_elem.inner_text().strip()
+                            if title and title not in [r['title'] for r in results]:
+                                results.append({
+                                    'title': title,
+                                    'snippet': '',
+                                    'link': href
+                                })
+                    except:
+                        continue
+            
+            return results[:num_results]
+            
+        finally:
+            page.close()
 
 
 class ColorPaletteExtractor:
