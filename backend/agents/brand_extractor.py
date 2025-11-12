@@ -209,11 +209,23 @@ Return ONLY valid JSON, no additional text."""
         website_text = context.get('website_text', '')
         website_description = context.get('website_description', '')
         
+        # Check if we hit a protection page
+        protection_indicators = ['just a moment', 'checking your browser', 'please wait', 'cloudflare']
+        title_lower = website_title.lower()
+        is_protection_page = any(indicator in title_lower for indicator in protection_indicators)
+        
         # Try to extract brand name from title
         brand_name = website_title.split('|')[0].split('-')[0].split('—')[0].strip()
         
+        # If we hit a protection page, try to extract from URL or use placeholder
+        if is_protection_page:
+            # Try to extract domain name from context if available
+            # This is a fallback - ideally Playwright should handle this
+            brand_name = "Website (Protected by Cloudflare)"
+            print("Note: Detected protection page. Install Playwright browsers for better results.")
+        
         # If title extraction failed, try to get from first words of description or text
-        if not brand_name or brand_name.lower() in ['home', 'welcome', 'index']:
+        elif not brand_name or brand_name.lower() in ['home', 'welcome', 'index', '']:
             # Try to extract from description
             if website_description:
                 brand_name = website_description.split('.')[0].split(',')[0].strip()[:50]
