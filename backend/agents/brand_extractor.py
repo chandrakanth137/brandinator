@@ -75,7 +75,7 @@ class BrandExtractionAgent:
             if api_key:
                 try:
                     llm = ChatGoogleGenerativeAI(
-                        model="gemini-pro",
+                        model="gemini-1.5-flash",
                         temperature=0.7,
                         google_api_key=api_key
                     )
@@ -114,7 +114,7 @@ class BrandExtractionAgent:
                 if api_key:
                     try:
                         llm = ChatGoogleGenerativeAI(
-                            model="gemini-flash",
+                            model="gemini-1.5-flash",
                             temperature=0.7,
                             google_api_key=api_key
                         )
