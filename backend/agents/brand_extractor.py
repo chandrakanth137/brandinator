@@ -1,13 +1,31 @@
 """Brand Extraction Agent using LangChain."""
 import json
 import os
-from typing import Dict, Any, List
-from langchain_openai import ChatOpenAI
+from typing import Dict, Any, List, Optional
 from langchain_core.messages import HumanMessage
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
+
+# Try to import various LLM providers
+try:
+    from langchain_openai import ChatOpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+
+try:
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    GOOGLE_AVAILABLE = True
+except ImportError:
+    GOOGLE_AVAILABLE = False
+
+try:
+    from langchain_ollama import ChatOllama
+    OLLAMA_AVAILABLE = True
+except ImportError:
+    OLLAMA_AVAILABLE = False
 
 from backend.agents.tools import (
     WebScraper,
@@ -27,24 +45,71 @@ class BrandExtractionAgent:
         self.color_extractor = ColorPaletteExtractor()
         self.vision_analyzer = VisionStyleAnalyzer()
         
-        # Initialize LLM (use OpenAI or fallback to mock)
-        api_key = os.getenv('OPENAI_API_KEY', '')
-        if api_key:
+        # Initialize LLM with multiple provider support and fallbacks
+        self.llm = self._initialize_llm()
+    
+    def _initialize_llm(self):
+        """Initialize LLM with fallback to multiple providers."""
+        # Try OpenAI first
+        if OPENAI_AVAILABLE:
+            api_key = os.getenv('OPENAI_API_KEY', '')
+            if api_key:
+                try:
+                    llm = ChatOpenAI(
+                        model="gpt-4o-mini",  # Use cheaper model, fallback to gpt-4o if needed
+                        temperature=0.7,
+                        api_key=api_key
+                    )
+                    # Test the connection
+                    llm.invoke([HumanMessage(content="test")])
+                    print("✓ OpenAI LLM (gpt-4o-mini) initialized successfully")
+                    return llm
+                except Exception as e:
+                    error_msg = str(e)
+                    if "quota" in error_msg.lower() or "429" in error_msg:
+                        print("⚠ OpenAI quota exceeded, trying alternative providers...")
+                    else:
+                        print(f"⚠ OpenAI LLM failed: {e}, trying alternatives...")
+        
+        # Try Google Gemini (free tier available)
+        if GOOGLE_AVAILABLE:
+            api_key = os.getenv('GEMINI_API_KEY', '') or os.getenv('GOOGLE_API_KEY', '')
+            if api_key:
+                try:
+                    llm = ChatGoogleGenerativeAI(
+                        model="gemini-pro",
+                        temperature=0.7,
+                        google_api_key=api_key
+                    )
+                    # Test the connection
+                    llm.invoke([HumanMessage(content="test")])
+                    print("✓ Google Gemini LLM initialized successfully")
+                    return llm
+                except Exception as e:
+                    print(f"⚠ Google Gemini LLM failed: {e}")
+        
+        # Try Ollama (local, free, no API key needed)
+        if OLLAMA_AVAILABLE:
             try:
-                self.llm = ChatOpenAI(
-                    model="gpt-4o",  # Use gpt-4o (latest) or gpt-4-turbo
-                    temperature=0.7,
-                    api_key=api_key
+                llm = ChatOllama(
+                    model="llama3.2",  # or "mistral", "llama2", etc.
+                    temperature=0.7
                 )
-                print("✓ OpenAI LLM initialized successfully")
+                # Test the connection
+                llm.invoke([HumanMessage(content="test")])
+                print("✓ Ollama LLM (local) initialized successfully")
+                return llm
             except Exception as e:
-                print(f"✗ Failed to initialize OpenAI LLM: {e}")
-                self.llm = None
-        else:
-            # Use a mock LLM if no API key
-            self.llm = None
-            print("⚠ OPENAI_API_KEY not found - LLM-based extraction disabled")
-            print("  Set OPENAI_API_KEY in .env file to enable intelligent brand analysis")
+                print(f"⚠ Ollama LLM not available: {e}")
+                print("  Install Ollama: https://ollama.ai/")
+        
+        # No LLM available
+        print("⚠ No LLM available - using enhanced rule-based extraction")
+        print("  Options:")
+        print("    - Set OPENAI_API_KEY for OpenAI")
+        print("    - Set GEMINI_API_KEY for Google Gemini (free tier)")
+        print("    - Install Ollama for local LLM: https://ollama.ai/")
+        return None
     
     def extract(self, url: str) -> BrandIdentity:
         """Extract brand identity from a website URL."""
@@ -172,11 +237,36 @@ class BrandExtractionAgent:
             try:
                 print("Using LLM to analyze and infer brand identity...")
                 response = self.llm.invoke([HumanMessage(content=prompt)])
-                brand_json = self._parse_llm_response(response.content)
+                # Handle different response formats
+                if hasattr(response, 'content'):
+                    content = response.content
+                elif hasattr(response, 'text'):
+                    content = response.text
+                else:
+                    content = str(response)
+                
+                brand_json = self._parse_llm_response(content)
                 print("✓ Brand identity extracted successfully with LLM")
             except Exception as e:
-                print(f"LLM error: {e}, using enhanced fallback")
-                brand_json = self._fallback_extraction(context)
+                error_msg = str(e)
+                if "quota" in error_msg.lower() or "429" in error_msg:
+                    print(f"LLM quota exceeded: {e}")
+                    print("  Trying to reinitialize with alternative provider...")
+                    # Try to reinitialize with alternative
+                    self.llm = self._initialize_llm()
+                    if self.llm:
+                        try:
+                            response = self.llm.invoke([HumanMessage(content=prompt)])
+                            content = response.content if hasattr(response, 'content') else str(response)
+                            brand_json = self._parse_llm_response(content)
+                            print("✓ Brand identity extracted with alternative LLM")
+                        except:
+                            brand_json = self._fallback_extraction(context)
+                    else:
+                        brand_json = self._fallback_extraction(context)
+                else:
+                    print(f"LLM error: {e}, using enhanced fallback")
+                    brand_json = self._fallback_extraction(context)
         else:
             # Use enhanced fallback extraction
             print("LLM not available, using rule-based extraction...")
