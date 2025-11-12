@@ -51,12 +51,26 @@ class ImageGenerator:
                 self.enabled = True
                 logger.info("✓ Vertex AI Imagen generation enabled successfully")
             except Exception as e:
-                logger.error(f"✗ Error initializing Vertex AI: {e}", exc_info=True)
-                logger.error("Common issues:")
-                logger.error("  1. Vertex AI API not enabled in Google Cloud Console")
-                logger.error("  2. Billing not enabled for the project")
-                logger.error("  3. Authentication failed - run: gcloud auth application-default login")
-                logger.error("  4. Missing IAM permissions - need 'Vertex AI User' role")
+                error_str = str(e)
+                logger.error(f"✗ Error initializing Vertex AI: {error_str}", exc_info=True)
+                
+                # Provide specific guidance based on error type
+                if "credentials were not found" in error_str or "DefaultCredentialsError" in error_str:
+                    logger.error("=" * 60)
+                    logger.error("AUTHENTICATION REQUIRED")
+                    logger.error("=" * 60)
+                    logger.error("Run this command to authenticate:")
+                    logger.error("  gcloud auth application-default login")
+                    logger.error("")
+                    logger.error("This will open a browser to sign in with your Google account.")
+                    logger.error("Make sure you use the same account that has access to project: " + str(self.project_id))
+                    logger.error("=" * 60)
+                else:
+                    logger.error("Common issues:")
+                    logger.error("  1. Vertex AI API not enabled in Google Cloud Console")
+                    logger.error("  2. Billing not enabled for the project")
+                    logger.error("  3. Authentication failed - run: gcloud auth application-default login")
+                    logger.error("  4. Missing IAM permissions - need 'Vertex AI User' role")
                 self.enabled = False
         else:
             self.enabled = False
