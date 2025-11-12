@@ -29,3 +29,6 @@ dependencies = [
 
 [project.scripts]
 backend = "backend.app.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["backend"]
