@@ -195,10 +195,51 @@ Return ONLY valid JSON, no additional text."""
     
     def _fallback_extraction(self, context: Dict[str, Any]) -> BrandIdentity:
         """Fallback extraction when LLM is not available."""
-        # Extract brand name
-        brand_name = context.get('website_title', '').split('|')[0].split('-')[0].strip()
-        if not brand_name:
+        # Extract brand name - try multiple methods
+        website_title = context.get('website_title', '')
+        website_text = context.get('website_text', '')
+        website_description = context.get('website_description', '')
+        
+        # Try to extract brand name from title
+        brand_name = website_title.split('|')[0].split('-')[0].split('—')[0].strip()
+        
+        # If title extraction failed, try to get from first words of description or text
+        if not brand_name or brand_name.lower() in ['home', 'welcome', 'index']:
+            # Try to extract from description
+            if website_description:
+                brand_name = website_description.split('.')[0].split(',')[0].strip()[:50]
+            # Or from first sentence of text
+            elif website_text:
+                first_sentence = website_text.split('.')[0].strip()
+                # Get first few words
+                words = first_sentence.split()[:3]
+                brand_name = ' '.join(words) if words else "Unknown Brand"
+        
+        if not brand_name or len(brand_name) < 2:
             brand_name = "Unknown Brand"
+        
+        # Extract mission and vision from text
+        mission = website_description[:300] if website_description else ""
+        if not mission and website_text:
+            # Try to find mission-like content (first paragraph or sentences with keywords)
+            sentences = website_text.split('.')
+            mission_candidates = [s.strip() for s in sentences[:3] if len(s.strip()) > 20]
+            mission = '. '.join(mission_candidates[:2])[:300] if mission_candidates else ""
+        
+        vision = ""
+        if website_text:
+            # Look for vision-related keywords
+            text_lower = website_text.lower()
+            vision_keywords = ['vision', 'future', 'goal', 'aspire', 'believe']
+            for keyword in vision_keywords:
+                if keyword in text_lower:
+                    # Find sentence containing keyword
+                    for sentence in website_text.split('.'):
+                        if keyword in sentence.lower() and len(sentence.strip()) > 30:
+                            vision = sentence.strip()[:300]
+                            break
+                    if vision:
+                        break
         
         # Extract colors
         colors = context.get('colors', [])
@@ -219,13 +260,32 @@ Return ONLY valid JSON, no additional text."""
             if len(colors) > 6:
                 color_palette.background = ColorInfo(name=colors[6].get('name', ''), hex=colors[6].get('hex', ''))
         
+        # Extract personality traits from text
+        personality = []
+        if website_text:
+            text_lower = website_text.lower()
+            trait_keywords = {
+                'innovative': ['innovative', 'innovation', 'creative', 'cutting-edge'],
+                'professional': ['professional', 'expert', 'expertise', 'quality'],
+                'modern': ['modern', 'contemporary', 'current', 'today'],
+                'trustworthy': ['trust', 'reliable', 'dependable', 'secure'],
+                'friendly': ['friendly', 'welcoming', 'approachable', 'accessible'],
+                'ambitious': ['ambitious', 'bold', 'visionary', 'forward-thinking']
+            }
+            for trait, keywords in trait_keywords.items():
+                if any(kw in text_lower for kw in keywords):
+                    personality.append(trait)
+        
+        if not personality:
+            personality = ["professional", "modern", "innovative"]
+        
         # Create brand identity
         brand_identity = BrandIdentity(
             brand_details=BrandDetails(
                 brand_name=brand_name,
-                brand_mission=context.get('website_description', '')[:200] or "Mission statement not found",
-                brand_vision=context.get('website_text', '')[:200] or "Vision statement not found",
-                brand_personality=["professional", "modern", "innovative"]
+                brand_mission=mission or "Mission statement not found",
+                brand_vision=vision or "Vision statement not found",
+                brand_personality=personality[:5]  # Limit to 5 traits
             ),
             image_style=ImageStyle(
                 style=context.get('style_analysis', {}).get('style', 'modern'),

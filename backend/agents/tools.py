@@ -94,11 +94,12 @@ class WebScraper:
         """Scrape using Playwright (handles JavaScript-rendered content)."""
         page = self.browser.new_page()
         try:
-            # Navigate to the page
-            page.goto(url, wait_until='networkidle', timeout=30000)
+            # Navigate to the page with more lenient timeout
+            # Use 'domcontentloaded' instead of 'networkidle' for faster loading
+            page.goto(url, wait_until='domcontentloaded', timeout=20000)
             
             # Wait a bit for dynamic content
-            page.wait_for_timeout(2000)
+            page.wait_for_timeout(3000)
             
             # Get page content
             html = page.content()

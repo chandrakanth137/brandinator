@@ -41,6 +41,11 @@ st.markdown("""
         max-height: 500px;
         overflow-y: auto;
     }
+    .brand-json pre {
+        color: #000000;
+        font-family: 'Courier New', monospace;
+        margin: 0;
+    }
     </style>
 """, unsafe_allow_html=True)
 
