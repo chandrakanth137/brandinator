@@ -114,7 +114,7 @@ class BrandExtractionAgent:
                 if api_key:
                     try:
                         llm = ChatGoogleGenerativeAI(
-                            model="gemini-pro",
+                            model="gemini-flash",
                             temperature=0.7,
                             google_api_key=api_key
                         )
