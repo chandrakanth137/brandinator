@@ -180,44 +180,112 @@ class ImageGenerator:
                             
                             # Image is base64 encoded
                             if hasattr(inline_data, 'data'):
-                                image_data_b64 = inline_data.data
-                                # Convert bytes to string if needed
-                                if isinstance(image_data_b64, bytes):
-                                    image_data_b64 = image_data_b64.decode('utf-8')
-                                logger.info(f"Image data length: {len(image_data_b64) if image_data_b64 else 0} characters")
+                                image_data_raw = inline_data.data
+                                logger.debug(f"Raw image data type: {type(image_data_raw)}, length: {len(image_data_raw) if image_data_raw else 0}")
+                                
+                                # Get MIME type first
+                                if hasattr(inline_data, 'mime_type'):
+                                    mime_type = inline_data.mime_type or "image/png"
+                                else:
+                                    mime_type = "image/png"
+                                logger.info(f"MIME type: {mime_type}")
+                                
+                                # Handle different data formats
+                                image_data_b64 = None
+                                image_bytes = None
+                                
+                                if isinstance(image_data_raw, bytes):
+                                    # Check if it's already raw image bytes (starts with image header)
+                                    if len(image_data_raw) > 0:
+                                        # PNG header: 0x89 0x50 0x4E 0x47
+                                        # JPEG header: 0xFF 0xD8
+                                        if image_data_raw[:2] == b'\x89\x50' or image_data_raw[:2] == b'\xff\xd8':
+                                            # It's already raw image bytes, not base64
+                                            logger.info(f"Found raw image bytes: {len(image_data_raw)} bytes")
+                                            image_bytes = image_data_raw
+                                        else:
+                                            # Try to decode as base64-encoded string (base64 is ASCII-compatible)
+                                            try:
+                                                # Decode bytes to ASCII string (base64 uses ASCII characters)
+                                                image_data_b64 = image_data_raw.decode('ascii')
+                                                logger.debug("Decoded bytes to base64 string (ASCII)")
+                                            except (UnicodeDecodeError, AttributeError):
+                                                # If it's not ASCII, try decoding the bytes directly as base64
+                                                logger.debug("Attempting to decode bytes directly as base64")
+                                                try:
+                                                    image_bytes = base64.b64decode(image_data_raw, validate=True)
+                                                    logger.info(f"Successfully decoded image from base64 bytes: {len(image_bytes)} bytes")
+                                                    # Re-encode to base64 string for data URL
+                                                    image_data_b64 = base64.b64encode(image_bytes).decode('ascii')
+                                                except Exception as e:
+                                                    logger.error(f"Failed to decode as base64: {e}")
+                                                    continue
+                                    else:
+                                        logger.warning("Empty image data")
+                                        continue
+                                elif isinstance(image_data_raw, str):
+                                    # Already a string (base64)
+                                    image_data_b64 = image_data_raw
+                                    logger.debug("Image data is already a string")
+                                else:
+                                    logger.warning(f"Unexpected image data type: {type(image_data_raw)}")
+                                    continue
+                                
+                                # Process the image data
+                                if image_bytes is not None:
+                                    # Already have raw image bytes
+                                    logger.info(f"Using raw image bytes: {len(image_bytes)} bytes")
+                                elif image_data_b64:
+                                    # Need to decode base64 string
+                                    try:
+                                        # Fix padding if needed (base64 strings must be multiples of 4)
+                                        missing_padding = len(image_data_b64) % 4
+                                        if missing_padding:
+                                            image_data_b64 += '=' * (4 - missing_padding)
+                                        
+                                        image_bytes = base64.b64decode(image_data_b64, validate=True)
+                                        logger.info(f"Successfully decoded base64 to image: {len(image_bytes)} bytes")
+                                    except Exception as decode_error:
+                                        logger.error(f"Error decoding base64 image data: {decode_error}", exc_info=True)
+                                        continue
+                                else:
+                                    logger.warning("No image data to process")
+                                    continue
+                                
+                                # Validate it's actually an image by checking headers
+                                if len(image_bytes) < 10:
+                                    logger.warning("Image data too small")
+                                    continue
+                                
+                                # Check for valid image headers
+                                is_valid_image = (
+                                    image_bytes[:8] == b'\x89PNG\r\n\x1a\n' or  # PNG
+                                    image_bytes[:2] == b'\xff\xd8' or  # JPEG
+                                    image_bytes[:4] == b'RIFF' or  # WebP
+                                    image_bytes[:6] == b'GIF87a' or image_bytes[:6] == b'GIF89a'  # GIF
+                                )
+                                
+                                if not is_valid_image:
+                                    logger.warning(f"Image data doesn't have valid image headers. First bytes: {image_bytes[:20]}")
+                                    # Continue anyway - might still be valid
+                                
+                                # Save image locally
+                                file_path = self._save_image(image_bytes, mime_type)
+                                logger.info(f"Image saved to: {file_path}")
+                                
+                                # Create data URL - use existing base64 or encode from bytes
+                                if image_data_b64:
+                                    data_url = f"data:{mime_type};base64,{image_data_b64}"
+                                else:
+                                    # Re-encode to base64 for data URL
+                                    image_data_b64 = base64.b64encode(image_bytes).decode('ascii')
+                                    data_url = f"data:{mime_type};base64,{image_data_b64}"
+                                
+                                logger.info(f"Returning data URL (length: {len(data_url)} chars)")
+                                return data_url
                             else:
                                 logger.warning("inline_data has no 'data' attribute")
                                 continue
-                                
-                            if hasattr(inline_data, 'mime_type'):
-                                mime_type = inline_data.mime_type or "image/png"
-                                logger.info(f"MIME type: {mime_type}")
-                            
-                            # Validate and decode base64
-                            if image_data_b64:
-                                try:
-                                    # Fix padding if needed (base64 strings must be multiples of 4)
-                                    missing_padding = len(image_data_b64) % 4
-                                    if missing_padding:
-                                        image_data_b64 += '=' * (4 - missing_padding)
-                                    
-                                    image_bytes = base64.b64decode(image_data_b64, validate=True)
-                                    logger.info(f"Successfully decoded image: {len(image_bytes)} bytes, type: {mime_type}")
-                                    
-                                    # Validate it's actually an image by checking headers
-                                    if len(image_bytes) < 10:
-                                        logger.warning("Image data too small")
-                                        continue
-                                    
-                                    # Save image locally
-                                    file_path = self._save_image(image_bytes, mime_type)
-                                    logger.info(f"Image saved to: {file_path}")
-                                    
-                                    # Return as data URL (use original base64, not re-encoded)
-                                    return f"data:{mime_type};base64,{image_data_b64}"
-                                except Exception as decode_error:
-                                    logger.error(f"Error decoding base64 image data: {decode_error}", exc_info=True)
-                                    continue
                         elif hasattr(part, 'text'):
                             # Sometimes the response might contain a URL or reference
                             text = part.text
