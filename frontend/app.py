@@ -239,16 +239,43 @@ with col2:
                             data += '=' * (4 - missing_padding)
                         
                         # Decode base64 to bytes
-                        image_bytes = base64.b64decode(data)
+                        try:
+                            image_bytes = base64.b64decode(data, validate=True)
+                        except:
+                            # If validation fails, try without validation
+                            image_bytes = base64.b64decode(data)
+                        
+                        # Validate that we have actual image data (check PNG/JPEG headers)
+                        if len(image_bytes) < 10:
+                            raise ValueError("Image data too small")
+                        
+                        # Check for valid image headers
+                        is_valid = (
+                            image_bytes[:8] == b'\x89PNG\r\n\x1a\n' or  # PNG
+                            image_bytes[:2] == b'\xff\xd8' or  # JPEG
+                            image_bytes[:4] == b'RIFF' or  # WebP
+                            image_bytes[:6] == b'GIF87a' or image_bytes[:6] == b'GIF89a'  # GIF
+                        )
+                        
+                        if not is_valid:
+                            st.warning("⚠️ Image data may be corrupted. First bytes: " + str(image_bytes[:20]))
                         
                         # Use st.image with bytes (most reliable method)
                         st.image(image_bytes, caption="Generated Image", width='stretch')
+                        st.success("✅ Image displayed successfully! (Also saved to backend/generated_images/)")
                     except Exception as decode_error:
+                        st.error(f"Error decoding image: {str(decode_error)}")
+                        st.info("Attempting fallback display method...")
                         # If decoding fails, try using st.image directly with the data URL
-                        st.image(image_url, caption="Generated Image", width='stretch')
+                        try:
+                            st.image(image_url, caption="Generated Image", width='stretch')
+                        except Exception as fallback_error:
+                            st.error(f"Fallback also failed: {str(fallback_error)}")
+                            st.info("The image URL was generated but could not be displayed. Check backend logs.")
                 else:
                     # For regular URLs, use st.image
                     st.image(image_url, caption="Generated Image", width='stretch')
+                    st.success("✅ Image displayed successfully!")
             except Exception as e:
                 st.error(f"Error displaying image: {str(e)}")
                 st.info("The image URL was generated but could not be displayed. Check the URL below.")

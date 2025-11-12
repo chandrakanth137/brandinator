@@ -2,7 +2,9 @@
 import os
 import json
 import base64
-from typing import Dict, Any
+from typing import Dict, Any, Optional
+from datetime import datetime
+from pathlib import Path
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -22,6 +24,12 @@ class ImageGenerator:
     def __init__(self):
         # Use separate API key for image generation
         api_key = os.getenv('GEMINI_IMAGE_API_KEY', '') or os.getenv('GEMINI_API_KEY', '') or os.getenv('GOOGLE_API_KEY', '')
+        
+        # Create downloads directory
+        self.downloads_dir = Path("generated_images")
+        self.downloads_dir.mkdir(exist_ok=True)
+        print(f"✓ Images will be saved to: {self.downloads_dir.absolute()}")
+        
         if api_key and genai:
             try:
                 genai.configure(api_key=api_key)
@@ -143,9 +151,12 @@ class ImageGenerator:
         
         return full_prompt
     
-    def _process_response(self, response) -> str:
-        """Process the Gemini API response to extract image data."""
+    def _process_response(self, response) -> Optional[str]:
+        """Process the Gemini API response to extract image data and save locally."""
         try:
+            image_bytes = None
+            mime_type = "image/png"
+            
             # The response structure may vary, try different ways to extract image
             # Check if response has image data
             if hasattr(response, 'candidates') and response.candidates:
@@ -157,31 +168,90 @@ class ImageGenerator:
                         if hasattr(part, 'inline_data'):
                             # Image is base64 encoded
                             image_data = part.inline_data.data
-                            image_mime_type = part.inline_data.mime_type
-                            # Return as data URL
-                            return f"data:{image_mime_type};base64,{image_data}"
+                            mime_type = part.inline_data.mime_type or "image/png"
+                            
+                            # Validate and decode base64
+                            try:
+                                # Fix padding if needed
+                                missing_padding = len(image_data) % 4
+                                if missing_padding:
+                                    image_data += '=' * (4 - missing_padding)
+                                
+                                image_bytes = base64.b64decode(image_data, validate=True)
+                                print(f"✓ Successfully decoded image: {len(image_bytes)} bytes, type: {mime_type}")
+                                
+                                # Save image locally
+                                file_path = self._save_image(image_bytes, mime_type)
+                                print(f"✓ Image saved to: {file_path}")
+                                
+                                # Return as data URL
+                                return f"data:{mime_type};base64,{image_data}"
+                            except Exception as decode_error:
+                                print(f"Error decoding base64 image data: {decode_error}")
+                                return None
                         elif hasattr(part, 'text'):
                             # Sometimes the response might contain a URL or reference
                             text = part.text
                             if text.startswith('http'):
+                                print(f"✓ Received image URL: {text}")
                                 return text
             
             # Alternative: check if response has direct image data
             if hasattr(response, 'text'):
                 # If response.text contains a URL
                 if response.text.startswith('http'):
+                    print(f"✓ Received image URL from response.text: {response.text}")
                     return response.text
             
             # If we can't extract image, return None to use mock
-            print("Warning: Could not extract image from API response")
+            print("⚠ Warning: Could not extract image from API response")
             print(f"Response structure: {type(response)}")
             if hasattr(response, '__dict__'):
                 print(f"Response attributes: {list(response.__dict__.keys())}")
+            
+            # Try to print more details about the response
+            try:
+                import json
+                if hasattr(response, 'candidates'):
+                    print(f"Candidates: {len(response.candidates)}")
+                    if response.candidates:
+                        candidate = response.candidates[0]
+                        print(f"Candidate attributes: {dir(candidate)}")
+                        if hasattr(candidate, 'content'):
+                            print(f"Content attributes: {dir(candidate.content)}")
+            except:
+                pass
+            
             return None
             
         except Exception as e:
             print(f"Error processing response: {e}")
+            import traceback
+            traceback.print_exc()
             return None
+    
+    def _save_image(self, image_bytes: bytes, mime_type: str) -> Path:
+        """Save image bytes to local file."""
+        # Determine file extension from MIME type
+        ext_map = {
+            'image/png': 'png',
+            'image/jpeg': 'jpg',
+            'image/jpg': 'jpg',
+            'image/webp': 'webp',
+            'image/gif': 'gif'
+        }
+        extension = ext_map.get(mime_type, 'png')
+        
+        # Create filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"generated_image_{timestamp}.{extension}"
+        file_path = self.downloads_dir / filename
+        
+        # Save the image
+        with open(file_path, 'wb') as f:
+            f.write(image_bytes)
+        
+        return file_path
     
     def _mock_generate(self, prompt: str) -> str:
         """Return a mock image URL for development."""
