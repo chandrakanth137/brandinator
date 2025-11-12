@@ -406,9 +406,33 @@ CRITICAL: Return ONLY valid JSON. No markdown, no explanations, no additional te
                 response = response[7:].strip().rstrip('```').strip()
             
             data = json.loads(response)
+            
+            # Ensure color palette fields are properly formatted (handle None values)
+            if 'image_style' in data and 'color_palette' in data['image_style']:
+                color_palette = data['image_style']['color_palette']
+                # Convert None values to empty ColorInfo objects
+                for key in ['primary', 'secondary', 'support_1', 'support_2', 'support_3', 'positive', 'background']:
+                    if key in color_palette and (color_palette[key] is None or not isinstance(color_palette[key], dict)):
+                        color_palette[key] = {"name": "", "hex": ""}
+                    elif key not in color_palette:
+                        color_palette[key] = {"name": "", "hex": ""}
+            
             return BrandIdentity(**data)
         except Exception as e:
             print(f"Error parsing LLM response: {e}")
+            # Try to fix common issues and retry
+            try:
+                # If it's a validation error, try to fix the data structure
+                if 'color_palette' in str(e) and 'data' in locals():
+                    # Ensure all color fields exist
+                    if 'image_style' in data and 'color_palette' in data['image_style']:
+                        cp = data['image_style']['color_palette']
+                        for key in ['primary', 'secondary', 'support_1', 'support_2', 'support_3', 'positive', 'background']:
+                            if key not in cp or cp[key] is None:
+                                cp[key] = {"name": "", "hex": ""}
+                    return BrandIdentity(**data)
+            except:
+                pass
             return self._fallback_extraction({})
     
     def _fallback_extraction(self, context: Dict[str, Any]) -> BrandIdentity:
