@@ -99,7 +99,7 @@ with col1:
         help="Enter the website URL to extract brand identity from"
     )
     
-    extract_button = st.button("🔍 Extract Brand", type="primary", use_container_width=True)
+    extract_button = st.button("🔍 Extract Brand", type="primary", width='stretch')
     
     if extract_button:
         if not url_input:
@@ -151,7 +151,7 @@ with col2:
             height=100
         )
         
-        generate_button = st.button("✨ Generate Image", type="primary", use_container_width=True)
+        generate_button = st.button("✨ Generate Image", type="primary", width='stretch')
         
         if generate_button:
             if not user_prompt:
@@ -226,7 +226,7 @@ with col2:
             
             # Display the image
             try:
-                st.image(image_url, caption="Generated Image", use_container_width=True)
+                st.image(image_url, caption="Generated Image", width='stretch')
             except Exception as e:
                 st.error(f"Error displaying image: {str(e)}")
                 st.info("The image URL was generated but could not be displayed. Check the URL below.")
@@ -249,7 +249,7 @@ with col2:
                         data=image_bytes,
                         file_name=f"generated_image.{file_extension}",
                         mime=mime_type,
-                        use_container_width=True
+                        width='stretch'
                     )
                 except Exception as e:
                     st.warning(f"Could not create download button: {e}")
@@ -269,7 +269,7 @@ with col2:
                             data=img_response.content,
                             file_name=f"generated_image.{file_extension}",
                             mime=content_type,
-                            use_container_width=True
+                            width='stretch'
                         )
                     else:
                         st.markdown(f"[🔗 View Full Image]({image_url})")
