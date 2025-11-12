@@ -41,11 +41,16 @@ class WebScraper:
         if self.use_playwright:
             try:
                 # Initialize Playwright in a thread to avoid asyncio conflicts
+                print("Initializing Playwright...")
                 future = self.executor.submit(self._init_playwright)
-                future.result(timeout=10)
-                print("Playwright initialized successfully")
+                future.result(timeout=15)
+                print("✓ Playwright initialized successfully")
             except Exception as e:
-                print(f"Failed to initialize Playwright: {e}, falling back to BeautifulSoup")
+                error_msg = str(e)
+                print(f"✗ Failed to initialize Playwright: {error_msg}")
+                if "Executable doesn't exist" in error_msg or "browser" in error_msg.lower():
+                    print("  → Install Playwright browsers with: uv run playwright install chromium")
+                print("  → Falling back to BeautifulSoup (may not work with JS-heavy sites)")
                 self.use_playwright = False
     
     def _init_playwright(self):
@@ -66,10 +71,32 @@ class WebScraper:
             except:
                 pass
     
+    def _is_protection_page(self, title: str, text: str) -> bool:
+        """Detect if we hit a protection/anti-bot page."""
+        protection_indicators = [
+            'just a moment',
+            'checking your browser',
+            'please wait',
+            'cloudflare',
+            'ddos protection',
+            'access denied',
+            'challenge',
+            'security check'
+        ]
+        title_lower = title.lower()
+        text_lower = text.lower()[:500]  # Check first 500 chars
+        
+        for indicator in protection_indicators:
+            if indicator in title_lower or indicator in text_lower:
+                return True
+        return False
+    
     def scrape(self, url: str) -> Dict[str, Any]:
         """Scrape a website and extract text content, images, and metadata."""
+        # Always try Playwright first if available (handles JS and protection pages)
         if self.use_playwright:
             try:
+                print(f"Attempting to scrape with Playwright: {url}")
                 # Run Playwright in thread pool to avoid asyncio conflicts
                 loop = None
                 try:
@@ -80,26 +107,70 @@ class WebScraper:
                 if loop and loop.is_running():
                     # We're in an async context, use thread pool
                     future = self.executor.submit(self._scrape_with_playwright, url)
-                    return future.result(timeout=60)
+                    result = future.result(timeout=60)
                 else:
                     # Not in async context, run directly
-                    return self._scrape_with_playwright(url)
+                    result = self._scrape_with_playwright(url)
+                
+                # Check if we got a protection page
+                if self._is_protection_page(result.get('title', ''), result.get('text', '')):
+                    print("Detected protection page, waiting longer and retrying with Playwright...")
+                    # Retry with longer wait
+                    if loop and loop.is_running():
+                        future = self.executor.submit(self._scrape_with_playwright, url, wait_time=10000)
+                        result = future.result(timeout=90)
+                    else:
+                        result = self._scrape_with_playwright(url, wait_time=10000)
+                
+                return result
             except Exception as e:
                 print(f"Playwright scraping failed: {e}, falling back to BeautifulSoup")
-                return self._scrape_with_bs4(url)
+                # Try BeautifulSoup as fallback
+                result = self._scrape_with_bs4(url)
+                # If we detect protection page, warn user
+                if self._is_protection_page(result.get('title', ''), result.get('text', '')):
+                    print("WARNING: Detected protection page. Playwright is needed to bypass it.")
+                    print("Please ensure Playwright browsers are installed: uv run playwright install chromium")
+                return result
         else:
-            return self._scrape_with_bs4(url)
+            # No Playwright available, use BeautifulSoup
+            print(f"Playwright not available, using BeautifulSoup: {url}")
+            result = self._scrape_with_bs4(url)
+            # Check for protection page
+            if self._is_protection_page(result.get('title', ''), result.get('text', '')):
+                print("WARNING: Detected protection page (e.g., Cloudflare).")
+                print("Install Playwright to bypass: uv run playwright install chromium")
+            return result
     
-    def _scrape_with_playwright(self, url: str) -> Dict[str, Any]:
+    def _scrape_with_playwright(self, url: str, wait_time: int = 3000) -> Dict[str, Any]:
         """Scrape using Playwright (handles JavaScript-rendered content)."""
         page = self.browser.new_page()
         try:
-            # Navigate to the page with more lenient timeout
-            # Use 'domcontentloaded' instead of 'networkidle' for faster loading
-            page.goto(url, wait_until='domcontentloaded', timeout=20000)
+            # Set realistic viewport and user agent
+            page.set_viewport_size({"width": 1920, "height": 1080})
+            page.set_extra_http_headers({
+                'Accept-Language': 'en-US,en;q=0.9',
+            })
             
-            # Wait a bit for dynamic content
-            page.wait_for_timeout(3000)
+            # Navigate to the page
+            page.goto(url, wait_until='domcontentloaded', timeout=30000)
+            
+            # Wait for dynamic content and potential protection pages
+            page.wait_for_timeout(wait_time)
+            
+            # Check if we're on a protection page and wait for it to resolve
+            page_title = page.title()
+            if 'just a moment' in page_title.lower() or 'checking' in page_title.lower():
+                print("Waiting for protection page to resolve...")
+                # Wait up to 15 seconds for protection page to resolve
+                try:
+                    page.wait_for_function(
+                        "document.title.toLowerCase().indexOf('just a moment') === -1 && document.title.toLowerCase().indexOf('checking') === -1",
+                        timeout=15000
+                    )
+                    page.wait_for_timeout(2000)  # Additional wait after resolution
+                except:
+                    print("Protection page may not have resolved, continuing anyway...")
             
             # Get page content
             html = page.content()
