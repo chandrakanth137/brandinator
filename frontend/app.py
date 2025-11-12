@@ -228,32 +228,30 @@ with col2:
             # Display the image - handle both data URLs and regular URLs
             try:
                 if image_url.startswith('data:'):
-                    # For data URLs, try using HTML img tag as it's more reliable
-                    # Extract MIME type for proper display
+                    # For data URLs, decode and use st.image with bytes
                     try:
-                        header = image_url.split(',')[0]
-                        mime_type = header.split(';')[0].split(':')[1]
-                    except:
-                        mime_type = 'image/png'
-                    
-                    # Use HTML img tag for data URLs (more reliable in Streamlit)
-                    st.markdown(
-                        f'<img src="{image_url}" alt="Generated Image" style="max-width: 100%; height: auto; border-radius: 8px;" />',
-                        unsafe_allow_html=True
-                    )
+                        # Extract base64 data from data URL
+                        header, data = image_url.split(',', 1)
+                        
+                        # Fix base64 padding if needed
+                        missing_padding = len(data) % 4
+                        if missing_padding:
+                            data += '=' * (4 - missing_padding)
+                        
+                        # Decode base64 to bytes
+                        image_bytes = base64.b64decode(data)
+                        
+                        # Use st.image with bytes (most reliable method)
+                        st.image(image_bytes, caption="Generated Image", width='stretch')
+                    except Exception as decode_error:
+                        # If decoding fails, try using st.image directly with the data URL
+                        st.image(image_url, caption="Generated Image", width='stretch')
                 else:
                     # For regular URLs, use st.image
                     st.image(image_url, caption="Generated Image", width='stretch')
             except Exception as e:
                 st.error(f"Error displaying image: {str(e)}")
-                # Try alternative display method
-                try:
-                    st.markdown(
-                        f'<img src="{image_url}" alt="Generated Image" style="max-width: 100%; height: auto;" />',
-                        unsafe_allow_html=True
-                    )
-                except:
-                    st.info("The image URL was generated but could not be displayed. Check the URL below.")
+                st.info("The image URL was generated but could not be displayed. Check the URL below.")
             
             # Show the URL for reference (download can be done via right-click on image)
             with st.expander("🔗 Image URL (for reference)"):
