@@ -166,36 +166,66 @@ class WebScraper:
     def _scrape_with_bs4(self, url: str) -> Dict[str, Any]:
         """Scrape using BeautifulSoup (fallback for static content)."""
         try:
-            response = self.session.get(url, timeout=10)
+            # Increase timeout and add better headers
+            response = self.session.get(url, timeout=15, allow_redirects=True)
             response.raise_for_status()
             soup = BeautifulSoup(response.content, 'html.parser')
             
-            # Extract text content
-            for script in soup(["script", "style"]):
+            # Extract title - try multiple methods
+            title_text = ""
+            title = soup.find('title')
+            if title:
+                title_text = title.get_text().strip()
+            else:
+                # Try og:title or other meta tags
+                og_title = soup.find('meta', attrs={'property': 'og:title'})
+                if og_title:
+                    title_text = og_title.get('content', '').strip()
+                else:
+                    # Try h1 as fallback
+                    h1 = soup.find('h1')
+                    if h1:
+                        title_text = h1.get_text().strip()
+            
+            # Extract meta description - try multiple methods
+            description = ""
+            meta_desc = soup.find('meta', attrs={'name': 'description'})
+            if meta_desc:
+                description = meta_desc.get('content', '').strip()
+            else:
+                meta_desc = soup.find('meta', attrs={'property': 'og:description'})
+                if meta_desc:
+                    description = meta_desc.get('content', '').strip()
+            
+            # Extract text content - prioritize main content areas
+            for script in soup(["script", "style", "nav", "footer", "header"]):
                 script.decompose()
             
-            text = soup.get_text()
+            # Try to find main content area
+            main_content = soup.find('main') or soup.find('article') or soup.find('div', class_=re.compile('content|main|body', re.I))
+            if main_content:
+                text = main_content.get_text()
+            else:
+                text = soup.get_text()
+            
+            # Clean up text
             lines = (line.strip() for line in text.splitlines())
             chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-            text = ' '.join(chunk for chunk in chunks if chunk)
+            text = ' '.join(chunk for chunk in chunks if chunk and len(chunk) > 1)
             
-            # Extract title
-            title = soup.find('title')
-            title_text = title.get_text().strip() if title else ""
-            
-            # Extract meta description
-            meta_desc = soup.find('meta', attrs={'name': 'description'})
-            if not meta_desc:
-                meta_desc = soup.find('meta', attrs={'property': 'og:description'})
-            description = meta_desc.get('content', '') if meta_desc else ""
-            
-            # Extract images
+            # Extract images - try multiple attributes
             images = []
-            for img in soup.find_all('img', src=True):
-                img_url = img.get('src') or img.get('data-src')
+            for img in soup.find_all('img'):
+                img_url = img.get('src') or img.get('data-src') or img.get('data-lazy-src') or img.get('data-original')
                 if img_url:
+                    # Skip data URIs and very small images
+                    if img_url.startswith('data:'):
+                        continue
                     if not img_url.startswith('http'):
                         img_url = urljoin(url, img_url)
+                    # Filter out tracking pixels and icons
+                    if any(skip in img_url.lower() for skip in ['pixel', 'tracking', 'icon', 'logo']):
+                        continue
                     images.append({
                         'url': img_url,
                         'alt': img.get('alt', '')
@@ -219,6 +249,7 @@ class WebScraper:
                 'links': list(set(links))[:10]
             }
         except Exception as e:
+            print(f"BeautifulSoup scraping error: {e}")
             return {
                 'url': url,
                 'error': str(e),
