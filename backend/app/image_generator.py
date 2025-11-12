@@ -156,43 +156,68 @@ class ImageGenerator:
         try:
             image_bytes = None
             mime_type = "image/png"
+            image_data_b64 = None
             
             # The response structure may vary, try different ways to extract image
             # Check if response has image data
             if hasattr(response, 'candidates') and response.candidates:
                 candidate = response.candidates[0]
+                print(f"Processing candidate: {type(candidate)}")
+                
                 # Check for image in content
                 if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
-                    for part in candidate.content.parts:
+                    print(f"Found {len(candidate.content.parts)} parts in content")
+                    for idx, part in enumerate(candidate.content.parts):
+                        print(f"Part {idx}: {type(part)}, attributes: {[attr for attr in dir(part) if not attr.startswith('_')]}")
+                        
                         # Check if part contains image data
                         if hasattr(part, 'inline_data'):
+                            inline_data = part.inline_data
+                            print(f"Found inline_data: {type(inline_data)}")
+                            
                             # Image is base64 encoded
-                            image_data = part.inline_data.data
-                            mime_type = part.inline_data.mime_type or "image/png"
+                            if hasattr(inline_data, 'data'):
+                                image_data_b64 = inline_data.data
+                                print(f"Image data length: {len(image_data_b64) if image_data_b64 else 0} characters")
+                            else:
+                                print("inline_data has no 'data' attribute")
+                                continue
+                                
+                            if hasattr(inline_data, 'mime_type'):
+                                mime_type = inline_data.mime_type or "image/png"
+                                print(f"MIME type: {mime_type}")
                             
                             # Validate and decode base64
-                            try:
-                                # Fix padding if needed
-                                missing_padding = len(image_data) % 4
-                                if missing_padding:
-                                    image_data += '=' * (4 - missing_padding)
-                                
-                                image_bytes = base64.b64decode(image_data, validate=True)
-                                print(f"✓ Successfully decoded image: {len(image_bytes)} bytes, type: {mime_type}")
-                                
-                                # Save image locally
-                                file_path = self._save_image(image_bytes, mime_type)
-                                print(f"✓ Image saved to: {file_path}")
-                                
-                                # Return as data URL
-                                return f"data:{mime_type};base64,{image_data}"
-                            except Exception as decode_error:
-                                print(f"Error decoding base64 image data: {decode_error}")
-                                return None
+                            if image_data_b64:
+                                try:
+                                    # Fix padding if needed
+                                    missing_padding = len(image_data_b64) % 4
+                                    if missing_padding:
+                                        image_data_b64 += '=' * (4 - missing_padding)
+                                    
+                                    image_bytes = base64.b64decode(image_data_b64, validate=True)
+                                    print(f"✓ Successfully decoded image: {len(image_bytes)} bytes, type: {mime_type}")
+                                    
+                                    # Validate it's actually an image by checking headers
+                                    if len(image_bytes) < 10:
+                                        print("⚠ Warning: Image data too small")
+                                        continue
+                                    
+                                    # Save image locally
+                                    file_path = self._save_image(image_bytes, mime_type)
+                                    print(f"✓ Image saved to: {file_path}")
+                                    
+                                    # Return as data URL (use original base64, not re-encoded)
+                                    return f"data:{mime_type};base64,{image_data_b64}"
+                                except Exception as decode_error:
+                                    print(f"Error decoding base64 image data: {decode_error}")
+                                    import traceback
+                                    traceback.print_exc()
+                                    continue
                         elif hasattr(part, 'text'):
                             # Sometimes the response might contain a URL or reference
                             text = part.text
-                            if text.startswith('http'):
+                            if text and text.startswith('http'):
                                 print(f"✓ Received image URL: {text}")
                                 return text
             
