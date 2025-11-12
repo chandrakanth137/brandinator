@@ -225,7 +225,7 @@ class ImageGenerator:
             if hasattr(response, 'text'):
                 # If response.text contains a URL
                 if response.text.startswith('http'):
-                    print(f"✓ Received image URL from response.text: {response.text}")
+                    logger.info(f"Received image URL from response.text: {response.text}")
                     return response.text
             
             # If we can't extract image, return None to use mock
