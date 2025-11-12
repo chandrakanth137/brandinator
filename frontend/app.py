@@ -34,7 +34,7 @@ st.markdown("""
         border-bottom: 2px solid #3498db;
     }
     .brand-json {
-        background-color: #f8f9fa;
+        background-color: #ffffff;
         padding: 1rem;
         border-radius: 5px;
         border: 1px solid #dee2e6;
@@ -42,9 +42,18 @@ st.markdown("""
         overflow-y: auto;
     }
     .brand-json pre {
-        color: #000000;
+        color: #000000 !important;
         font-family: 'Courier New', monospace;
         margin: 0;
+        background-color: #ffffff;
+    }
+    .stMarkdown pre {
+        color: #000000 !important;
+        background-color: #ffffff !important;
+    }
+    .stMarkdown code {
+        color: #000000 !important;
+        background-color: #f8f9fa !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -113,9 +122,10 @@ with col1:
     if st.session_state.brand_identity:
         st.markdown("### Extracted Brand Identity")
         
-        # Pretty print JSON
+        # Pretty print JSON with proper styling
         brand_json_str = json.dumps(st.session_state.brand_identity, indent=2, default=str)
-        st.markdown(f'<div class="brand-json"><pre>{brand_json_str}</pre></div>', unsafe_allow_html=True)
+        # Use st.code for better JSON display with syntax highlighting
+        st.code(brand_json_str, language='json')
         
         # Show source URLs
         if st.session_state.source_urls:
