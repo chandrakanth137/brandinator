@@ -88,27 +88,33 @@ brandinator/
    You need to complete these steps:
 
    1. **Create a Google Cloud Project** (if you don't have one)
+
       - Go to [Google Cloud Console](https://console.cloud.google.com/)
       - Create a new project or select an existing one
 
    2. **Enable Billing**
+
       - Vertex AI is a paid service
       - Go to Billing section and link your project to a billing account
 
    3. **Enable the Vertex AI API**
+
       - Go to [API Library](https://console.cloud.google.com/apis/library)
       - Search for "Vertex AI API"
       - Click "Enable" for your project
 
    4. **Set up Authentication**:
+
       ```bash
       # Install gcloud CLI: https://cloud.google.com/sdk/docs/install
       gcloud auth application-default login
       ```
+
       - This opens a browser to authenticate
       - Use the same Google account that has access to your project
 
    5. **Set IAM Permissions**:
+
       - Go to [IAM & Admin](https://console.cloud.google.com/iam-admin/iam)
       - Find your email address (the one you used for `gcloud auth`)
       - Click "Edit" (pencil icon)
@@ -122,6 +128,7 @@ brandinator/
       ```
 
    **Troubleshooting**: If image generation fails, check the logs in `logs/` directory. Common issues:
+
    - API not enabled → Enable Vertex AI API in Cloud Console
    - Billing not enabled → Link project to billing account
    - Authentication failed → Run `gcloud auth application-default login` again
