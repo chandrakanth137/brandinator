@@ -2,7 +2,9 @@
 import streamlit as st
 import requests
 import json
+import base64
 from typing import Optional
+from urllib.parse import urlparse
 
 # Backend API URL
 BACKEND_URL = "http://localhost:8000"
@@ -188,11 +190,7 @@ with col2:
             # Display the image
             st.image(image_url, caption="Generated Image", use_container_width=True)
             
-            # Download button
-            import base64
-            from urllib.parse import urlparse
-            
-            # Handle both data URLs and regular URLs
+            # Download button - Handle both data URLs and regular URLs
             if image_url.startswith('data:'):
                 # Data URL - extract base64 data
                 try:
