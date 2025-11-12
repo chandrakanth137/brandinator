@@ -2,7 +2,15 @@
 import os
 import json
 from typing import Dict, Any
-import google.generativeai as genai
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+try:
+    import google.generativeai as genai
+except ImportError:
+    genai = None
 
 from backend.app.models import BrandIdentity
 
@@ -12,7 +20,7 @@ class ImageGenerator:
     
     def __init__(self):
         api_key = os.getenv('GOOGLE_API_KEY', '')
-        if api_key:
+        if api_key and genai:
             try:
                 genai.configure(api_key=api_key)
                 self.client = genai.GenerativeModel('gemini-pro-vision')

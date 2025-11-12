@@ -7,6 +7,10 @@ from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai import ChatOpenAI
 from langchain.tools import Tool
 from langchain.schema import SystemMessage, HumanMessage
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 from backend.agents.tools import (
     WebScraper,
