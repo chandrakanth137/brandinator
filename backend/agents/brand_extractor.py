@@ -32,7 +32,7 @@ class BrandExtractionAgent:
         if api_key:
             try:
                 self.llm = ChatOpenAI(
-                    model="gpt-4-turbo-preview",
+                    model="gpt-4o",  # Use gpt-4o (latest) or gpt-4-turbo
                     temperature=0.7,
                     api_key=api_key
                 )
@@ -339,24 +339,49 @@ CRITICAL: Return ONLY valid JSON. No markdown, no explanations, no additional te
                         vision = sentence.strip()[:300]
                         break
         
-        # Extract colors
+        # Extract colors and assign them meaningfully
         colors = context.get('colors', [])
         color_palette = ColorPalette()
+        
         if colors:
-            if len(colors) > 0:
-                color_palette.primary = ColorInfo(name=colors[0].get('name', ''), hex=colors[0].get('hex', ''))
-            if len(colors) > 1:
-                color_palette.secondary = ColorInfo(name=colors[1].get('name', ''), hex=colors[1].get('hex', ''))
-            if len(colors) > 2:
-                color_palette.support_1 = ColorInfo(name=colors[2].get('name', ''), hex=colors[2].get('hex', ''))
-            if len(colors) > 3:
-                color_palette.support_2 = ColorInfo(name=colors[3].get('name', ''), hex=colors[3].get('hex', ''))
-            if len(colors) > 4:
-                color_palette.support_3 = ColorInfo(name=colors[4].get('name', ''), hex=colors[4].get('hex', ''))
-            if len(colors) > 5:
-                color_palette.positive = ColorInfo(name=colors[5].get('name', ''), hex=colors[5].get('hex', ''))
-            if len(colors) > 6:
-                color_palette.background = ColorInfo(name=colors[6].get('name', ''), hex=colors[6].get('hex', ''))
+            # Separate colors by source/type
+            background_colors = [c for c in colors if 'background' in c.get('name', '').lower() or c.get('source') == 'body_background']
+            text_colors = [c for c in colors if 'text' in c.get('name', '').lower() or c.get('source') == 'text']
+            brand_colors = [c for c in colors if c.get('source') != 'body_background' and 'background' not in c.get('name', '').lower()]
+            
+            # Assign background color (most important)
+            if background_colors:
+                bg = background_colors[0]
+                color_palette.background = ColorInfo(name=bg.get('name', 'background'), hex=bg.get('hex', ''))
+            elif len(colors) > 0:
+                # Use first color as background if no explicit background found
+                color_palette.background = ColorInfo(name=colors[0].get('name', 'background'), hex=colors[0].get('hex', ''))
+            
+            # Assign primary brand color (usually the most prominent non-background color)
+            if brand_colors:
+                color_palette.primary = ColorInfo(name=brand_colors[0].get('name', 'primary'), hex=brand_colors[0].get('hex', ''))
+                if len(brand_colors) > 1:
+                    color_palette.secondary = ColorInfo(name=brand_colors[1].get('name', 'secondary'), hex=brand_colors[1].get('hex', ''))
+            elif len(colors) > 1:
+                color_palette.primary = ColorInfo(name=colors[1].get('name', 'primary'), hex=colors[1].get('hex', ''))
+            
+            # Assign remaining colors
+            remaining = [c for c in colors if c not in background_colors[:1] and c not in brand_colors[:2]]
+            if len(remaining) > 0:
+                color_palette.secondary = ColorInfo(name=remaining[0].get('name', 'secondary'), hex=remaining[0].get('hex', ''))
+            if len(remaining) > 1:
+                color_palette.support_1 = ColorInfo(name=remaining[1].get('name', 'support'), hex=remaining[1].get('hex', ''))
+            if len(remaining) > 2:
+                color_palette.support_2 = ColorInfo(name=remaining[2].get('name', 'support'), hex=remaining[2].get('hex', ''))
+            if len(remaining) > 3:
+                color_palette.support_3 = ColorInfo(name=remaining[3].get('name', 'support'), hex=remaining[3].get('hex', ''))
+            
+            # Positive color (usually a bright/CTA color, often green or blue)
+            positive_candidates = [c for c in colors if any(word in c.get('name', '').lower() for word in ['green', 'blue', 'positive', 'cta', 'accent'])]
+            if positive_candidates:
+                color_palette.positive = ColorInfo(name=positive_candidates[0].get('name', 'positive'), hex=positive_candidates[0].get('hex', ''))
+            elif len(colors) > 2:
+                color_palette.positive = ColorInfo(name=colors[2].get('name', 'positive'), hex=colors[2].get('hex', ''))
         
         # Extract personality traits by analyzing tone and content
         personality = []

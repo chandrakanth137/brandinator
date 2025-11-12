@@ -223,6 +223,26 @@ class WebScraper:
             html = page.content()
             soup = BeautifulSoup(html, 'html.parser')
             
+            # Extract computed styles for background and text colors
+            try:
+                body_element = page.query_selector('body') or page.query_selector('main')
+                if body_element:
+                    bg_color = page.evaluate("""
+                        (element) => {
+                            const style = window.getComputedStyle(element);
+                            return style.backgroundColor || style.background || '';
+                        }
+                    """, body_element)
+                    text_color = page.evaluate("""
+                        (element) => {
+                            const style = window.getComputedStyle(element);
+                            return style.color || '';
+                        }
+                    """, body_element)
+            except:
+                bg_color = None
+                text_color = None
+            
             # Extract title
             title = page.title()
             title_text = title.strip() if title else ""
@@ -548,7 +568,121 @@ class GoogleSearchTool:
 
 
 class ColorPaletteExtractor:
-    """Extract color palette from images."""
+    """Extract color palette from images and website CSS."""
+    
+    def extract_from_css(self, html_content: str, soup: BeautifulSoup = None) -> List[Dict[str, str]]:
+        """Extract colors from CSS styles in the HTML."""
+        colors = []
+        color_pattern = re.compile(r'#([0-9a-fA-F]{3,6})\b|rgb\([^)]+\)|rgba\([^)]+\)')
+        
+        if soup is None:
+            soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Extract from inline styles
+        for element in soup.find_all(style=True):
+            style = element.get('style', '')
+            matches = color_pattern.findall(style)
+            for match in matches:
+                if isinstance(match, tuple):
+                    match = match[0] if match[0] else ''
+                if match and len(match) >= 3:
+                    hex_color = f"#{match}" if not match.startswith('#') else match
+                    if len(hex_color) == 4:  # Convert #RGB to #RRGGBB
+                        hex_color = f"#{hex_color[1]}{hex_color[1]}{hex_color[2]}{hex_color[2]}{hex_color[3]}{hex_color[3]}"
+                    colors.append({
+                        'name': self._hex_to_name(hex_color),
+                        'hex': hex_color,
+                        'source': 'css'
+                    })
+        
+        # Extract from style tags
+        for style_tag in soup.find_all('style'):
+            style_content = style_tag.string or ''
+            matches = color_pattern.findall(style_content)
+            for match in matches:
+                if isinstance(match, tuple):
+                    match = match[0] if match[0] else ''
+                if match and len(match) >= 3:
+                    hex_color = f"#{match}" if not match.startswith('#') else match
+                    if len(hex_color) == 4:
+                        hex_color = f"#{hex_color[1]}{hex_color[1]}{hex_color[2]}{hex_color[2]}{hex_color[3]}{hex_color[3]}"
+                    colors.append({
+                        'name': self._hex_to_name(hex_color),
+                        'hex': hex_color,
+                        'source': 'css'
+                    })
+        
+        # Extract background and text colors from body/main elements
+        try:
+            body = soup.find('body') or soup.find('main') or soup.find('html')
+            if body:
+                # Check inline styles
+                if body.get('style'):
+                    bg_match = re.search(r'background[^:]*:\s*([^;]+)', body.get('style', ''))
+                    if bg_match:
+                        color_val = bg_match.group(1).strip()
+                        hex_color = self._parse_color_value(color_val)
+                        if hex_color:
+                            colors.append({
+                                'name': 'background',
+                                'hex': hex_color,
+                                'source': 'body_background'
+                            })
+        except:
+            pass
+        
+        # Deduplicate by hex
+        seen = set()
+        unique_colors = []
+        for color in colors:
+            if color['hex'].upper() not in seen:
+                seen.add(color['hex'].upper())
+                unique_colors.append(color)
+        
+        return unique_colors[:10]  # Return top 10 unique colors
+    
+    def _parse_color_value(self, color_val: str) -> Optional[str]:
+        """Parse various color formats to hex."""
+        color_val = color_val.strip().lower()
+        
+        # Hex color
+        if color_val.startswith('#'):
+            if len(color_val) == 4:
+                return f"#{color_val[1]}{color_val[1]}{color_val[2]}{color_val[2]}{color_val[3]}{color_val[3]}"
+            return color_val[:7]
+        
+        # RGB/RGBA
+        rgb_match = re.match(r'rgba?\((\d+),\s*(\d+),\s*(\d+)', color_val)
+        if rgb_match:
+            r, g, b = int(rgb_match.group(1)), int(rgb_match.group(2)), int(rgb_match.group(3))
+            return f"#{r:02x}{g:02x}{b:02x}"
+        
+        # Named colors (basic)
+        named_colors = {
+            'white': '#ffffff', 'black': '#000000', 'red': '#ff0000',
+            'green': '#00ff00', 'blue': '#0000ff', 'gray': '#808080',
+            'grey': '#808080'
+        }
+        if color_val in named_colors:
+            return named_colors[color_val]
+        
+        return None
+    
+    def _hex_to_name(self, hex_color: str) -> str:
+        """Convert hex color to approximate name."""
+        if not hex_color or not hex_color.startswith('#'):
+            return 'unknown'
+        
+        try:
+            hex_color = hex_color.lstrip('#')
+            if len(hex_color) == 3:
+                hex_color = ''.join([c*2 for c in hex_color])
+            r = int(hex_color[0:2], 16)
+            g = int(hex_color[2:4], 16)
+            b = int(hex_color[4:6], 16)
+            return self._rgb_to_name((r, g, b))
+        except:
+            return 'unknown'
     
     def extract_from_url(self, image_url: str, num_colors: int = 7) -> List[Dict[str, str]]:
         """Extract color palette from an image URL."""
