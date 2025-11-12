@@ -257,20 +257,28 @@ with col2:
                     if isinstance(image_bytes, str):
                         image_bytes = image_bytes.encode('utf-8')
                     
-                    # Create download button with bytes
+                    # Use BytesIO to ensure proper byte handling
+                    image_buffer = io.BytesIO(image_bytes)
+                    image_buffer.seek(0)
+                    
+                    # Create download button with bytes from buffer
                     st.download_button(
                         label="📥 Download Image",
-                        data=image_bytes,
+                        data=image_buffer.getvalue(),
                         file_name=f"generated_image.{file_extension}",
                         mime=mime_type,
                         width='stretch'
                     )
                 except Exception as e:
-                    # Fallback: provide download link using HTML
-                    st.warning(f"Could not create download button: {e}")
-                    # Create a download link using HTML
+                    # Fallback: provide download link using HTML (more reliable for data URLs)
+                    # Create a download link using HTML with JavaScript for better compatibility
                     st.markdown(
-                        f'<a href="{image_url}" download="generated_image.{file_extension}" style="display: inline-block; padding: 0.5rem 1rem; background-color: #1f77b4; color: white; text-decoration: none; border-radius: 0.25rem;">📥 Download Image</a>',
+                        f'''
+                        <a href="{image_url}" download="generated_image.{file_extension}" 
+                           style="display: inline-block; padding: 0.5rem 1rem; background-color: #1f77b4; color: white; text-decoration: none; border-radius: 0.25rem; cursor: pointer;">
+                           📥 Download Image
+                        </a>
+                        ''',
                         unsafe_allow_html=True
                     )
             else:
