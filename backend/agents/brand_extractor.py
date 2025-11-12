@@ -233,11 +233,15 @@ ANALYSIS INSTRUCTIONS:
    - Environment: What settings/contexts are shown or implied
 
 6. **Color Palette**: Use the extracted colors and assign them meaningfully:
-   - Primary: Most prominent brand color
-   - Secondary: Supporting brand color
-   - Support colors: Additional brand colors
-   - Positive: Color used for positive actions/CTAs
-   - Background: Typical background color
+   - Background: The actual website background color (usually white, black, or a brand color)
+   - Primary: Most prominent brand/accent color (often used in logos, CTAs, headers)
+   - Secondary: Supporting brand color (complementary to primary)
+   - Support colors: Additional brand colors found in the design
+   - Positive: Color used for positive actions/CTAs (often green, blue, or accent color)
+   - Text: The main text color (usually black or dark gray on light backgrounds, white on dark)
+   
+   IMPORTANT: Only fill colors that are actually found. If a color isn't present, leave it empty.
+   Focus on extracting the actual background, text, and 1-3 main brand colors from the website.
 
 Return a complete Brand Identity JSON:
 {{
