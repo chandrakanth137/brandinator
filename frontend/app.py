@@ -66,6 +66,8 @@ if 'brand_identity' not in st.session_state:
     st.session_state.brand_identity = None
 if 'source_urls' not in st.session_state:
     st.session_state.source_urls = []
+if 'generated_image_url' not in st.session_state:
+    st.session_state.generated_image_url = None
 
 
 def check_backend_health() -> bool:
@@ -161,7 +163,7 @@ with col2:
                                 "brand_json": st.session_state.brand_identity,
                                 "user_prompt": user_prompt
                             },
-                            timeout=60
+                            timeout=120  # Increased timeout for image generation
                         )
                         response.raise_for_status()
                         data = response.json()
@@ -169,13 +171,76 @@ with col2:
                         image_url = data.get("image_url")
                         
                         if image_url:
+                            # Store in session state so it persists
+                            st.session_state.generated_image_url = image_url
                             st.success("✅ Image generated successfully!")
-                            st.image(image_url, caption="Generated Image", use_container_width=True)
-                            
-                            # Download button
-                            st.markdown(f"[🔗 View Full Image]({image_url})")
+                        else:
+                            st.error("No image URL returned from the API")
                     except requests.exceptions.RequestException as e:
                         st.error(f"Error generating image: {str(e)}")
+                        st.session_state.generated_image_url = None
+        
+        # Display generated image if available
+        if st.session_state.generated_image_url:
+            st.markdown("### Generated Image")
+            image_url = st.session_state.generated_image_url
+            
+            # Display the image
+            st.image(image_url, caption="Generated Image", use_container_width=True)
+            
+            # Download button
+            import base64
+            from urllib.parse import urlparse
+            
+            # Handle both data URLs and regular URLs
+            if image_url.startswith('data:'):
+                # Data URL - extract base64 data
+                try:
+                    # Format: data:image/png;base64,<data>
+                    header, data = image_url.split(',', 1)
+                    mime_type = header.split(';')[0].split(':')[1]
+                    file_extension = mime_type.split('/')[1] if '/' in mime_type else 'png'
+                    
+                    # Decode base64
+                    image_bytes = base64.b64decode(data)
+                    
+                    # Create download button
+                    st.download_button(
+                        label="📥 Download Image",
+                        data=image_bytes,
+                        file_name=f"generated_image.{file_extension}",
+                        mime=mime_type,
+                        use_container_width=True
+                    )
+                except Exception as e:
+                    st.warning(f"Could not create download button: {e}")
+                    st.markdown(f"[🔗 View Full Image]({image_url})")
+            else:
+                # Regular URL - provide download link
+                try:
+                    # Try to fetch the image and provide download
+                    img_response = requests.get(image_url, timeout=10)
+                    if img_response.status_code == 200:
+                        # Determine file extension from URL or content type
+                        content_type = img_response.headers.get('content-type', 'image/png')
+                        file_extension = content_type.split('/')[1] if '/' in content_type else 'png'
+                        
+                        st.download_button(
+                            label="📥 Download Image",
+                            data=img_response.content,
+                            file_name=f"generated_image.{file_extension}",
+                            mime=content_type,
+                            use_container_width=True
+                        )
+                    else:
+                        st.markdown(f"[🔗 View Full Image]({image_url})")
+                except Exception as e:
+                    # If we can't fetch, just provide the link
+                    st.markdown(f"[🔗 View Full Image]({image_url})")
+            
+            # Also show the URL for reference
+            with st.expander("🔗 Image URL"):
+                st.code(image_url, language=None)
 
 # Footer
 st.markdown("---")
