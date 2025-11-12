@@ -240,8 +240,13 @@ with col2:
                     mime_type = header.split(';')[0].split(':')[1]
                     file_extension = mime_type.split('/')[1] if '/' in mime_type else 'png'
                     
+                    # Fix base64 padding if needed (base64 strings must be multiples of 4)
+                    missing_padding = len(data) % 4
+                    if missing_padding:
+                        data += '=' * (4 - missing_padding)
+                    
                     # Decode base64
-                    image_bytes = base64.b64decode(data)
+                    image_bytes = base64.b64decode(data, validate=True)
                     
                     # Create download button
                     st.download_button(
