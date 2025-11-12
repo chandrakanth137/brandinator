@@ -173,22 +173,63 @@ with col2:
                         image_url = data.get("image_url")
                         
                         if image_url:
-                            # Store in session state so it persists
-                            st.session_state.generated_image_url = image_url
-                            st.success("✅ Image generated successfully!")
+                            # Verify the image is accessible before showing success
+                            # For data URLs, they're immediately available
+                            # For regular URLs, verify they're accessible
+                            image_ready = False
+                            
+                            if image_url.startswith('data:'):
+                                # Data URLs are immediately available
+                                image_ready = True
+                            else:
+                                # For regular URLs, verify they're accessible
+                                try:
+                                    img_check = requests.head(image_url, timeout=10, allow_redirects=True)
+                                    if img_check.status_code == 200:
+                                        image_ready = True
+                                    else:
+                                        # Try GET as fallback (some servers don't support HEAD)
+                                        img_check = requests.get(image_url, timeout=10, stream=True)
+                                        if img_check.status_code == 200:
+                                            image_ready = True
+                                except:
+                                    # If verification fails, still store it and let display handle it
+                                    image_ready = True  # Assume it's ready, display will handle errors
+                            
+                            if image_ready:
+                                # Store in session state so it persists
+                                st.session_state.generated_image_url = image_url
+                                st.session_state.image_generation_status = "success"
+                            else:
+                                st.error("Image URL returned but image is not accessible yet")
+                                st.session_state.generated_image_url = None
+                                st.session_state.image_generation_status = None
                         else:
                             st.error("No image URL returned from the API")
+                            st.session_state.generated_image_url = None
+                            st.session_state.image_generation_status = None
                     except requests.exceptions.RequestException as e:
                         st.error(f"Error generating image: {str(e)}")
                         st.session_state.generated_image_url = None
+                        st.session_state.image_generation_status = None
         
         # Display generated image if available
         if st.session_state.generated_image_url:
-            st.markdown("### Generated Image")
             image_url = st.session_state.generated_image_url
             
+            # Show success message only when image is actually displayed
+            if st.session_state.get("image_generation_status") == "success":
+                st.success("✅ Image generated successfully!")
+                st.session_state.image_generation_status = "displayed"  # Prevent duplicate messages
+            
+            st.markdown("### Generated Image")
+            
             # Display the image
-            st.image(image_url, caption="Generated Image", use_container_width=True)
+            try:
+                st.image(image_url, caption="Generated Image", use_container_width=True)
+            except Exception as e:
+                st.error(f"Error displaying image: {str(e)}")
+                st.info("The image URL was generated but could not be displayed. Check the URL below.")
             
             # Download button - Handle both data URLs and regular URLs
             if image_url.startswith('data:'):
