@@ -387,14 +387,27 @@ class WebScraper:
                 if urlparse(href).netloc == urlparse(url).netloc:
                     links.append(href)
             
-            return {
+            result = {
                 'url': url,
                 'title': title_text,
                 'description': description,
                 'text': text[:5000],
                 'images': images[:20],
-                'links': list(set(links))[:10]
+                'links': list(set(links))[:10],
+                'html': str(soup)  # Include HTML for CSS color extraction
             }
+            
+            # Try to extract background color from body element
+            try:
+                body = soup.find('body') or soup.find('main')
+                if body and body.get('style'):
+                    bg_match = re.search(r'background[^:]*:\s*([^;]+)', body.get('style', ''))
+                    if bg_match:
+                        result['background_color'] = bg_match.group(1).strip()
+            except:
+                pass
+            
+            return result
         except Exception as e:
             print(f"BeautifulSoup scraping error: {e}")
             return {
@@ -402,7 +415,8 @@ class WebScraper:
                 'error': str(e),
                 'text': '',
                 'images': [],
-                'links': []
+                'links': [],
+                'html': ''
             }
 
 
