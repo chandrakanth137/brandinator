@@ -290,14 +290,23 @@ class WebScraper:
                 except:
                     continue
             
-            return {
+            result = {
                 'url': url,
                 'title': title_text,
                 'description': description,
                 'text': text[:5000],
                 'images': images[:20],
-                'links': list(set(links))[:10]
+                'links': list(set(links))[:10],
+                'html': html  # Include HTML for CSS color extraction
             }
+            
+            # Add computed colors if available
+            if 'bg_color' in locals() and bg_color:
+                result['background_color'] = bg_color
+            if 'text_color' in locals() and text_color:
+                result['text_color'] = text_color
+            
+            return result
         finally:
             page.close()
     
