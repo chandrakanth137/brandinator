@@ -8,14 +8,17 @@ from PIL import Image
 from colorthief import ColorThief
 import io
 import os
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
-# Try to import Playwright
+# Try to import Playwright (both sync and async)
 try:
-    from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+    from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
+    from playwright.sync_api import sync_playwright
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
@@ -29,6 +32,7 @@ class WebScraper:
         self.use_playwright = PLAYWRIGHT_AVAILABLE
         self.playwright = None
         self.browser = None
+        self.executor = ThreadPoolExecutor(max_workers=1)
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -36,12 +40,18 @@ class WebScraper:
         
         if self.use_playwright:
             try:
-                self.playwright = sync_playwright().start()
-                self.browser = self.playwright.chromium.launch(headless=True)
+                # Initialize Playwright in a thread to avoid asyncio conflicts
+                future = self.executor.submit(self._init_playwright)
+                future.result(timeout=10)
                 print("Playwright initialized successfully")
             except Exception as e:
                 print(f"Failed to initialize Playwright: {e}, falling back to BeautifulSoup")
                 self.use_playwright = False
+    
+    def _init_playwright(self):
+        """Initialize Playwright (called in thread pool)."""
+        self.playwright = sync_playwright().start()
+        self.browser = self.playwright.chromium.launch(headless=True)
     
     def __del__(self):
         """Cleanup Playwright resources."""
@@ -60,7 +70,20 @@ class WebScraper:
         """Scrape a website and extract text content, images, and metadata."""
         if self.use_playwright:
             try:
-                return self._scrape_with_playwright(url)
+                # Run Playwright in thread pool to avoid asyncio conflicts
+                loop = None
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    pass
+                
+                if loop and loop.is_running():
+                    # We're in an async context, use thread pool
+                    future = self.executor.submit(self._scrape_with_playwright, url)
+                    return future.result(timeout=60)
+                else:
+                    # Not in async context, run directly
+                    return self._scrape_with_playwright(url)
             except Exception as e:
                 print(f"Playwright scraping failed: {e}, falling back to BeautifulSoup")
                 return self._scrape_with_bs4(url)
@@ -211,15 +234,22 @@ class GoogleSearchTool:
         self.use_playwright = PLAYWRIGHT_AVAILABLE
         self.playwright = None
         self.browser = None
+        self.executor = ThreadPoolExecutor(max_workers=1)
         
         if self.use_playwright:
             try:
-                self.playwright = sync_playwright().start()
-                self.browser = self.playwright.chromium.launch(headless=True)
+                # Initialize Playwright in a thread to avoid asyncio conflicts
+                future = self.executor.submit(self._init_playwright)
+                future.result(timeout=10)
                 print("GoogleSearchTool: Playwright initialized")
             except Exception as e:
                 print(f"GoogleSearchTool: Failed to initialize Playwright: {e}")
                 self.use_playwright = False
+    
+    def _init_playwright(self):
+        """Initialize Playwright (called in thread pool)."""
+        self.playwright = sync_playwright().start()
+        self.browser = self.playwright.chromium.launch(headless=True)
     
     def __del__(self):
         """Cleanup Playwright resources."""
@@ -247,7 +277,20 @@ class GoogleSearchTool:
             ]
         
         try:
-            return self._search_with_playwright(query, num_results)
+            # Run Playwright in thread pool to avoid asyncio conflicts
+            loop = None
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                pass
+            
+            if loop and loop.is_running():
+                # We're in an async context, use thread pool
+                future = self.executor.submit(self._search_with_playwright, query, num_results)
+                return future.result(timeout=60)
+            else:
+                # Not in async context, run directly
+                return self._search_with_playwright(query, num_results)
         except Exception as e:
             print(f"Google search failed: {e}")
             # Return mock results on error
