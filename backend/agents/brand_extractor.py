@@ -71,11 +71,11 @@ class BrandExtractionAgent:
         
         # Try Google Gemini (free tier available)
         if GOOGLE_AVAILABLE:
-            api_key = os.getenv('GEMINI_API_KEY', '') or os.getenv('GOOGLE_API_KEY', '')
+            api_key = os.getenv('GEMINI_ANALYSIS_API_KEY', '') or os.getenv('GEMINI_API_KEY', '') or os.getenv('GOOGLE_API_KEY', '')
             if api_key:
                 try:
                     llm = ChatGoogleGenerativeAI(
-                        model="gemini-1.5-flash",
+                        model="gemini-1.5-flash-latest",  # Use latest version
                         temperature=0.7,
                         google_api_key=api_key
                     )
@@ -83,6 +83,17 @@ class BrandExtractionAgent:
                     return llm
                 except Exception as e:
                     print(f"⚠ Google Gemini LLM failed: {e}")
+                    # Try alternative model name
+                    try:
+                        llm = ChatGoogleGenerativeAI(
+                            model="gemini-pro",
+                            temperature=0.7,
+                            google_api_key=api_key
+                        )
+                        print("✓ Google Gemini LLM (gemini-pro) initialized successfully")
+                        return llm
+                    except:
+                        pass
         
         # Try Ollama (local, free, no API key needed)
         if OLLAMA_AVAILABLE:
@@ -101,7 +112,7 @@ class BrandExtractionAgent:
         print("⚠ No LLM available - using enhanced rule-based extraction")
         print("  Options:")
         print("    - Set OPENAI_API_KEY for OpenAI")
-        print("    - Set GEMINI_API_KEY for Google Gemini (free tier)")
+        print("    - Set GEMINI_ANALYSIS_API_KEY for Google Gemini (free tier)")
         print("    - Install Ollama for local LLM: https://ollama.ai/")
         return None
     
@@ -110,18 +121,28 @@ class BrandExtractionAgent:
         # Try Google Gemini if OpenAI failed
         if skip_llm and OPENAI_AVAILABLE and isinstance(skip_llm, ChatOpenAI):
             if GOOGLE_AVAILABLE:
-                api_key = os.getenv('GEMINI_API_KEY', '') or os.getenv('GOOGLE_API_KEY', '')
+                api_key = os.getenv('GEMINI_ANALYSIS_API_KEY', '') or os.getenv('GEMINI_API_KEY', '') or os.getenv('GOOGLE_API_KEY', '')
                 if api_key:
                     try:
                         llm = ChatGoogleGenerativeAI(
-                            model="gemini-1.5-flash",
+                            model="gemini-1.5-flash-latest",
                             temperature=0.7,
                             google_api_key=api_key
                         )
                         print("✓ Switched to Google Gemini LLM")
                         return llm
                     except:
-                        pass
+                        # Try alternative model
+                        try:
+                            llm = ChatGoogleGenerativeAI(
+                                model="gemini-pro",
+                                temperature=0.7,
+                                google_api_key=api_key
+                            )
+                            print("✓ Switched to Google Gemini LLM (gemini-pro)")
+                            return llm
+                        except:
+                            pass
         
         # Try Ollama as last resort
         if OLLAMA_AVAILABLE:

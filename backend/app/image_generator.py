@@ -20,7 +20,8 @@ class ImageGenerator:
     """Generate on-brand images using brand identity."""
     
     def __init__(self):
-        api_key = os.getenv('GEMINI_API_KEY', '') or os.getenv('GOOGLE_API_KEY', '')
+        # Use separate API key for image generation
+        api_key = os.getenv('GEMINI_IMAGE_API_KEY', '') or os.getenv('GEMINI_API_KEY', '') or os.getenv('GOOGLE_API_KEY', '')
         if api_key and genai:
             try:
                 genai.configure(api_key=api_key)
@@ -33,7 +34,7 @@ class ImageGenerator:
         else:
             self.enabled = False
             if not api_key:
-                print("GEMINI_API_KEY not found, image generation will be mocked")
+                print("GEMINI_IMAGE_API_KEY not found, image generation will be mocked")
     
     def generate(
         self,
