@@ -49,7 +49,7 @@ class ImageGenerator:
         if self.enabled:
             try:
                 # Use Google Gemini Nano Banana for image generation
-                print(f"Generating image with prompt: {style_prompt[:100]}...")
+                print(f"Generating image with prompt: {style_prompt[:500]}...") # Log full prompt
                 response = self.model.generate_content(style_prompt)
                 
                 # Process the response to extract image data
@@ -58,6 +58,7 @@ class ImageGenerator:
                     return image_url
                 else:
                     print("Could not extract image from response, using mock")
+                    print(f"Raw API response (if available): {response}") # Log raw response
                     return self._mock_generate(style_prompt)
             except Exception as e:
                 print(f"Error generating image: {e}")
