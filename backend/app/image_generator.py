@@ -10,12 +10,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 try:
-    # Vertex AI Imagen library
+    # Vertex AI Imagen library (using stable version, not preview)
     import vertexai
-    from vertexai.preview.vision_models import ImageGenerationModel
-except ImportError:
-    vertexai = None
-    ImageGenerationModel = None
+    from vertexai.vision_models import ImageGenerationModel
+except ImportError as e:
+    # If stable version not available, try preview version as fallback
+    try:
+        from vertexai.preview.vision_models import ImageGenerationModel
+    except ImportError:
+        vertexai = None
+        ImageGenerationModel = None
 
 from backend.app.models import BrandIdentity
 from backend.app.logger import logger
@@ -36,21 +40,28 @@ class ImageGenerator:
         
         if self.project_id and vertexai and ImageGenerationModel:
             try:
+                logger.info(f"Initializing Vertex AI with project: {self.project_id}, location: {self.location}")
                 # Initialize Vertex AI
                 vertexai.init(project=self.project_id, location=self.location)
                 
+                logger.info("Loading Imagen model: imagegeneration@006")
                 # Load the pre-trained Imagen model
                 self.model = ImageGenerationModel.from_pretrained("imagegeneration@006")
                 
                 self.enabled = True
-                logger.info("Vertex AI Imagen generation enabled")
+                logger.info("✓ Vertex AI Imagen generation enabled successfully")
             except Exception as e:
-                logger.error(f"Error initializing Vertex AI: {e}", exc_info=True)
+                logger.error(f"✗ Error initializing Vertex AI: {e}", exc_info=True)
+                logger.error("Common issues:")
+                logger.error("  1. Vertex AI API not enabled in Google Cloud Console")
+                logger.error("  2. Billing not enabled for the project")
+                logger.error("  3. Authentication failed - run: gcloud auth application-default login")
+                logger.error("  4. Missing IAM permissions - need 'Vertex AI User' role")
                 self.enabled = False
         else:
             self.enabled = False
             if not self.project_id:
-                logger.warning("GOOGLE_PROJECT_ID not found, image generation will be mocked")
+                logger.warning("GOOGLE_PROJECT_ID not found in environment variables, image generation will be mocked")
             if not vertexai:
                 logger.warning("vertexai library not found, image generation will be mocked")
     
@@ -101,7 +112,12 @@ class ImageGenerator:
                     return self._mock_generate(style_prompt)
             
             except Exception as e:
-                logger.error(f"Error generating image: {e}", exc_info=True)
+                logger.error(f"✗ Error generating image: {e}", exc_info=True)
+                logger.error("This error occurred during image generation. Check:")
+                logger.error("  1. Vertex AI API is enabled")
+                logger.error("  2. Billing is enabled")
+                logger.error("  3. Authentication is valid: gcloud auth application-default login")
+                logger.error("  4. IAM permissions include 'Vertex AI User' role")
                 return self._mock_generate(style_prompt)
         else:
             # Return mock image URL
