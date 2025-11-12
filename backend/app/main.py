@@ -56,7 +56,7 @@ async def extract_brand(request: ExtractRequest):
         brand_identity = brand_extractor.extract(request.url)
         
         # Collect source URLs
-        source_urls = [page.url for page in brand_identity._metadata.source_pages]
+        source_urls = [page.url for page in brand_identity.metadata.source_pages]
         
         return ExtractResponse(
             brand_identity=brand_identity,

@@ -89,7 +89,7 @@ class BrandExtractionAgent:
         )
         
         # Add metadata
-        brand_identity._metadata.source_pages = source_pages
+        brand_identity.metadata.source_pages = source_pages
         
         return brand_identity
     

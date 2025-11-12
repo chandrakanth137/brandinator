@@ -55,10 +55,9 @@ class BrandIdentity(BaseModel):
     """Complete Brand Identity JSON structure."""
     brand_details: BrandDetails = Field(default_factory=lambda: BrandDetails())
     image_style: ImageStyle = Field(default_factory=lambda: ImageStyle())
-    _metadata: Metadata = Field(default_factory=lambda: Metadata(), alias="_metadata")
+    metadata: Metadata = Field(default_factory=lambda: Metadata(), alias="_metadata", serialization_alias="_metadata")
 
-    class Config:
-        populate_by_name = True
+    model_config = {"populate_by_name": True}
 
 
 class ExtractRequest(BaseModel):
