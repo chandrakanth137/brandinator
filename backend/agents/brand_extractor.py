@@ -30,14 +30,21 @@ class BrandExtractionAgent:
         # Initialize LLM (use OpenAI or fallback to mock)
         api_key = os.getenv('OPENAI_API_KEY', '')
         if api_key:
-            self.llm = ChatOpenAI(
-                model="gpt-4-turbo-preview",
-                temperature=0.7,
-                api_key=api_key
-            )
+            try:
+                self.llm = ChatOpenAI(
+                    model="gpt-4-turbo-preview",
+                    temperature=0.7,
+                    api_key=api_key
+                )
+                print("✓ OpenAI LLM initialized successfully")
+            except Exception as e:
+                print(f"✗ Failed to initialize OpenAI LLM: {e}")
+                self.llm = None
         else:
             # Use a mock LLM if no API key
             self.llm = None
+            print("⚠ OPENAI_API_KEY not found - LLM-based extraction disabled")
+            print("  Set OPENAI_API_KEY in .env file to enable intelligent brand analysis")
     
     def extract(self, url: str) -> BrandIdentity:
         """Extract brand identity from a website URL."""
