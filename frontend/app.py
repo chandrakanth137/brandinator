@@ -234,53 +234,25 @@ with col2:
             
             # Download button - Handle both data URLs and regular URLs
             if image_url.startswith('data:'):
-                # Data URL - extract base64 data
+                # For data URLs, use HTML download link (more reliable than st.download_button)
+                # Extract file extension from MIME type
                 try:
-                    # Format: data:image/png;base64,<data>
-                    header, data = image_url.split(',', 1)
+                    header = image_url.split(',')[0]
                     mime_type = header.split(';')[0].split(':')[1]
                     file_extension = mime_type.split('/')[1] if '/' in mime_type else 'png'
-                    
-                    # Fix base64 padding if needed (base64 strings must be multiples of 4)
-                    missing_padding = len(data) % 4
-                    if missing_padding:
-                        data += '=' * (4 - missing_padding)
-                    
-                    # Decode base64 to bytes
-                    try:
-                        image_bytes = base64.b64decode(data, validate=True)
-                    except Exception as decode_error:
-                        # If validation fails, try without validation
-                        image_bytes = base64.b64decode(data)
-                    
-                    # Ensure we have bytes, not string
-                    if isinstance(image_bytes, str):
-                        image_bytes = image_bytes.encode('utf-8')
-                    
-                    # Use BytesIO to ensure proper byte handling
-                    image_buffer = io.BytesIO(image_bytes)
-                    image_buffer.seek(0)
-                    
-                    # Create download button with bytes from buffer
-                    st.download_button(
-                        label="📥 Download Image",
-                        data=image_buffer.getvalue(),
-                        file_name=f"generated_image.{file_extension}",
-                        mime=mime_type,
-                        width='stretch'
-                    )
-                except Exception as e:
-                    # Fallback: provide download link using HTML (more reliable for data URLs)
-                    # Create a download link using HTML with JavaScript for better compatibility
-                    st.markdown(
-                        f'''
-                        <a href="{image_url}" download="generated_image.{file_extension}" 
-                           style="display: inline-block; padding: 0.5rem 1rem; background-color: #1f77b4; color: white; text-decoration: none; border-radius: 0.25rem; cursor: pointer;">
-                           📥 Download Image
-                        </a>
-                        ''',
-                        unsafe_allow_html=True
-                    )
+                except:
+                    file_extension = 'png'
+                
+                # Create a styled download link using HTML
+                st.markdown(
+                    f'''
+                    <a href="{image_url}" download="generated_image.{file_extension}" 
+                       style="display: inline-block; padding: 0.5rem 1rem; background-color: #1f77b4; color: white; text-decoration: none; border-radius: 0.25rem; cursor: pointer; width: 100%; text-align: center;">
+                       📥 Download Image
+                    </a>
+                    ''',
+                    unsafe_allow_html=True
+                )
             else:
                 # Regular URL - provide download link
                 try:
