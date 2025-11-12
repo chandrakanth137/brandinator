@@ -11,10 +11,10 @@ load_dotenv()
 
 try:
     # Vertex AI Imagen library
-    from google.cloud import aiplatform
-    from google.cloud.aiplatform.models import ImageGenerationModel
+    import vertexai
+    from vertexai.preview.vision_models import ImageGenerationModel
 except ImportError:
-    aiplatform = None
+    vertexai = None
     ImageGenerationModel = None
 
 from backend.app.models import BrandIdentity
@@ -34,10 +34,10 @@ class ImageGenerator:
         self.downloads_dir.mkdir(exist_ok=True)
         logger.info(f"Images will be saved to: {self.downloads_dir.absolute()}")
         
-        if self.project_id and aiplatform and ImageGenerationModel:
+        if self.project_id and vertexai and ImageGenerationModel:
             try:
                 # Initialize Vertex AI
-                aiplatform.init(project=self.project_id, location=self.location)
+                vertexai.init(project=self.project_id, location=self.location)
                 
                 # Load the pre-trained Imagen model
                 self.model = ImageGenerationModel.from_pretrained("imagegeneration@006")
@@ -51,8 +51,8 @@ class ImageGenerator:
             self.enabled = False
             if not self.project_id:
                 logger.warning("GOOGLE_PROJECT_ID not found, image generation will be mocked")
-            if not aiplatform:
-                logger.warning("google-cloud-aiplatform library not found, image generation will be mocked")
+            if not vertexai:
+                logger.warning("vertexai library not found, image generation will be mocked")
     
     def generate(
         self,
