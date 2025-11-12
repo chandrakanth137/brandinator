@@ -11,7 +11,7 @@ load_dotenv()
 from backend.app.models import ExtractRequest, ExtractResponse, GenerateRequest, GenerateResponse
 from backend.agents.brand_extractor import BrandExtractionAgent
 from backend.app.image_generator import ImageGenerator
-from backend.app.logger import logger
+from backend.app.logger import logger, LOG_FILE
 
 app = FastAPI(
     title="Brand Extraction Agent API",
@@ -94,6 +94,8 @@ async def generate_image(request: GenerateRequest):
 
 def main():
     """Main entry point for running the backend server."""
+    logger.info("Starting Brand Extraction Agent API server...")
+    logger.info(f"Log file: {LOG_FILE.absolute()}")
     uvicorn.run(
         "backend.app.main:app",
         host="0.0.0.0",
