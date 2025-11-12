@@ -3,6 +3,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 from backend.app.models import ExtractRequest, ExtractResponse, GenerateRequest, GenerateResponse
 from backend.agents.brand_extractor import BrandExtractionAgent
@@ -83,11 +87,16 @@ async def generate_image(request: GenerateRequest):
         )
 
 
-if __name__ == "__main__":
+def main():
+    """Main entry point for running the backend server."""
     uvicorn.run(
         "backend.app.main:app",
         host="0.0.0.0",
         port=8000,
         reload=True
     )
+
+
+if __name__ == "__main__":
+    main()
 
