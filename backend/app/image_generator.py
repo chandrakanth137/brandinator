@@ -155,74 +155,99 @@ class ImageGenerator:
         brand_identity: BrandIdentity,
         user_prompt: str
     ) -> str:
-        """Build a detailed prompt incorporating brand identity and style."""
+        """Build a prompt with visual style transfer - colors and aesthetic only, no brand text."""
         brand = brand_identity.brand_details
         style = brand_identity.image_style
         
-        # Start with the user's prompt as the core request
-        prompt_parts = [f"Create an image: {user_prompt}"]
+        # Start with the user's prompt as the core content
+        prompt_parts = [user_prompt]
         
-        # Incorporate brand identity context
-        if brand.brand_name:
-            prompt_parts.append(f"Brand: {brand.brand_name}")
-        
-        if brand.brand_mission:
-            prompt_parts.append(f"Brand mission: {brand.brand_mission}")
-        
-        if brand.brand_vision:
-            prompt_parts.append(f"Brand vision: {brand.brand_vision}")
-        
+        # Extract personality traits as visual adjectives (not branded)
         if brand.brand_personality:
-            prompt_parts.append(f"Brand personality: {', '.join(brand.brand_personality)}")
+            # Convert personality to visual descriptors
+            visual_traits = []
+            for trait in brand.brand_personality:
+                trait_lower = trait.lower()
+                if 'professional' in trait_lower:
+                    visual_traits.append('clean and polished')
+                elif 'modern' in trait_lower:
+                    visual_traits.append('contemporary and sleek')
+                elif 'innovative' in trait_lower:
+                    visual_traits.append('cutting-edge and forward-thinking')
+                elif 'friendly' in trait_lower:
+                    visual_traits.append('warm and approachable')
+                elif 'luxurious' in trait_lower or 'premium' in trait_lower:
+                    visual_traits.append('elegant and high-end')
+                elif 'playful' in trait_lower or 'fun' in trait_lower:
+                    visual_traits.append('vibrant and energetic')
+                elif 'trustworthy' in trait_lower or 'reliable' in trait_lower:
+                    visual_traits.append('solid and dependable')
+                elif 'creative' in trait_lower:
+                    visual_traits.append('artistic and imaginative')
+                else:
+                    visual_traits.append(trait_lower)
+            
+            if visual_traits:
+                prompt_parts.append(f"Style: {', '.join(visual_traits)}")
         
         # Add visual style specifications
         if style.style:
-            prompt_parts.append(f"Visual style: {style.style}")
+            prompt_parts.append(f"Aesthetic: {style.style}")
         
         if style.keywords:
-            prompt_parts.append(f"Style keywords: {', '.join(style.keywords)}")
+            # Filter out brand-specific keywords, keep visual ones
+            visual_keywords = [kw for kw in style.keywords if kw.lower() not in ['brand', 'logo', 'company']]
+            if visual_keywords:
+                prompt_parts.append(f"Visual elements: {', '.join(visual_keywords)}")
         
         if style.temperature:
             prompt_parts.append(f"Color temperature: {style.temperature}")
         
-        # Add color palette - prioritize primary and secondary, include all available colors
-        color_descriptions = []
+        # Color palette - the key element for style transfer
+        color_palette = []
         if style.color_palette.primary.hex:
-            color_descriptions.append(f"primary color {style.color_palette.primary.hex}")
+            color_palette.append(style.color_palette.primary.hex)
         if style.color_palette.secondary.hex:
-            color_descriptions.append(f"secondary color {style.color_palette.secondary.hex}")
+            color_palette.append(style.color_palette.secondary.hex)
         if style.color_palette.support_1.hex:
-            color_descriptions.append(f"accent color {style.color_palette.support_1.hex}")
+            color_palette.append(style.color_palette.support_1.hex)
         if style.color_palette.support_2.hex:
-            color_descriptions.append(f"accent color {style.color_palette.support_2.hex}")
+            color_palette.append(style.color_palette.support_2.hex)
         if style.color_palette.support_3.hex:
-            color_descriptions.append(f"accent color {style.color_palette.support_3.hex}")
-        if style.color_palette.positive.hex:
-            color_descriptions.append(f"positive accent {style.color_palette.positive.hex}")
+            color_palette.append(style.color_palette.support_3.hex)
+        
+        if color_palette:
+            # Describe the color scheme in a natural way
+            if len(color_palette) >= 2:
+                prompt_parts.append(f"Color scheme: dominant colors {color_palette[0]} and {color_palette[1]}")
+                if len(color_palette) > 2:
+                    other_colors = ', '.join(color_palette[2:])
+                    prompt_parts.append(f"with accent colors {other_colors}")
+            else:
+                prompt_parts.append(f"Dominant color: {color_palette[0]}")
+        
+        # Add background color if specified
         if style.color_palette.background.hex:
-            color_descriptions.append(f"background color {style.color_palette.background.hex}")
+            prompt_parts.append(f"Background tone: {style.color_palette.background.hex}")
         
-        if color_descriptions:
-            prompt_parts.append(f"Use brand colors: {', '.join(color_descriptions)}")
-        
-        # Add specific visual elements
-        if style.occupation:
-            prompt_parts.append(f"Represent occupations: {', '.join(style.occupation)}")
+        # Add environment/setting details
+        if style.environment:
+            prompt_parts.append(f"Setting: {', '.join(style.environment)}")
         
         if style.props:
-            prompt_parts.append(f"Include props: {', '.join(style.props)}")
-        
-        if style.environment:
-            prompt_parts.append(f"Environment setting: {', '.join(style.environment)}")
+            prompt_parts.append(f"Props/elements: {', '.join(style.props)}")
         
         if style.people_ethnicity:
-            prompt_parts.append(f"People representation: {style.people_ethnicity}")
+            prompt_parts.append(f"People: {style.people_ethnicity}")
+        
+        if style.occupation:
+            prompt_parts.append(f"Featuring: {', '.join(style.occupation)}")
         
         # Combine into a cohesive prompt
         full_prompt = ". ".join(prompt_parts)
         
-        # Add instruction to ensure brand consistency
-        full_prompt += ". Ensure the image reflects the brand's identity, mission, and visual style consistently."
+        # Add instruction for style consistency (visual only)
+        full_prompt += ". Maintain consistent visual style, color harmony, and aesthetic throughout the image."
         
         return full_prompt
     
