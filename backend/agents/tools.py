@@ -596,7 +596,9 @@ class ColorPaletteExtractor:
     def extract_from_css(self, html_content: str, soup: BeautifulSoup = None) -> List[Dict[str, str]]:
         """Extract colors from CSS styles in the HTML."""
         colors = []
-        color_pattern = re.compile(r'#([0-9a-fA-F]{3,6})\b|rgb\([^)]+\)|rgba\([^)]+\)')
+        # Improved regex patterns for color extraction
+        hex_pattern = re.compile(r'#([0-9a-fA-F]{3,6})\b')
+        rgb_pattern = re.compile(r'rgba?\((\d+),\s*(\d+),\s*(\d+)')
         
         if soup is None:
             soup = BeautifulSoup(html_content, 'html.parser')
@@ -604,36 +606,54 @@ class ColorPaletteExtractor:
         # Extract from inline styles
         for element in soup.find_all(style=True):
             style = element.get('style', '')
-            matches = color_pattern.findall(style)
-            for match in matches:
-                if isinstance(match, tuple):
-                    match = match[0] if match[0] else ''
-                if match and len(match) >= 3:
-                    hex_color = f"#{match}" if not match.startswith('#') else match
-                    if len(hex_color) == 4:  # Convert #RGB to #RRGGBB
-                        hex_color = f"#{hex_color[1]}{hex_color[1]}{hex_color[2]}{hex_color[2]}{hex_color[3]}{hex_color[3]}"
-                    colors.append({
-                        'name': self._hex_to_name(hex_color),
-                        'hex': hex_color,
-                        'source': 'css'
-                    })
+            
+            # Extract hex colors
+            for match in hex_pattern.finditer(style):
+                hex_val = match.group(1)
+                hex_color = f"#{hex_val}"
+                if len(hex_val) == 3:  # Convert #RGB to #RRGGBB
+                    hex_color = f"#{hex_val[0]}{hex_val[0]}{hex_val[1]}{hex_val[1]}{hex_val[2]}{hex_val[2]}"
+                colors.append({
+                    'name': self._hex_to_name(hex_color),
+                    'hex': hex_color,
+                    'source': 'css_inline'
+                })
+            
+            # Extract RGB colors
+            for match in rgb_pattern.finditer(style):
+                r, g, b = int(match.group(1)), int(match.group(2)), int(match.group(3))
+                hex_color = f"#{r:02x}{g:02x}{b:02x}"
+                colors.append({
+                    'name': self._hex_to_name(hex_color),
+                    'hex': hex_color,
+                    'source': 'css_inline'
+                })
         
         # Extract from style tags
         for style_tag in soup.find_all('style'):
             style_content = style_tag.string or ''
-            matches = color_pattern.findall(style_content)
-            for match in matches:
-                if isinstance(match, tuple):
-                    match = match[0] if match[0] else ''
-                if match and len(match) >= 3:
-                    hex_color = f"#{match}" if not match.startswith('#') else match
-                    if len(hex_color) == 4:
-                        hex_color = f"#{hex_color[1]}{hex_color[1]}{hex_color[2]}{hex_color[2]}{hex_color[3]}{hex_color[3]}"
-                    colors.append({
-                        'name': self._hex_to_name(hex_color),
-                        'hex': hex_color,
-                        'source': 'css'
-                    })
+            
+            # Extract hex colors
+            for match in hex_pattern.finditer(style_content):
+                hex_val = match.group(1)
+                hex_color = f"#{hex_val}"
+                if len(hex_val) == 3:
+                    hex_color = f"#{hex_val[0]}{hex_val[0]}{hex_val[1]}{hex_val[1]}{hex_val[2]}{hex_val[2]}"
+                colors.append({
+                    'name': self._hex_to_name(hex_color),
+                    'hex': hex_color,
+                    'source': 'css_style_tag'
+                })
+            
+            # Extract RGB colors
+            for match in rgb_pattern.finditer(style_content):
+                r, g, b = int(match.group(1)), int(match.group(2)), int(match.group(3))
+                hex_color = f"#{r:02x}{g:02x}{b:02x}"
+                colors.append({
+                    'name': self._hex_to_name(hex_color),
+                    'hex': hex_color,
+                    'source': 'css_style_tag'
+                })
         
         # Extract background and text colors from body/main elements
         try:
