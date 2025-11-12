@@ -78,14 +78,19 @@ brandinator/
 
 ### Start the Backend
 
-In one terminal:
+In one terminal, you can use any of these methods:
 
+**Option 1: Using the run script**
+```bash
+./run_backend.sh
+```
+
+**Option 2: Using uv run**
 ```bash
 uv run backend/app/main.py
 ```
 
-Or using uvicorn directly:
-
+**Option 3: Using uvicorn directly**
 ```bash
 uv run uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
 ```
@@ -96,6 +101,12 @@ The API will be available at `http://localhost:8000`
 
 In another terminal:
 
+**Option 1: Using the run script**
+```bash
+./run_frontend.sh
+```
+
+**Option 2: Using streamlit directly**
 ```bash
 streamlit run frontend/app.py
 ```
