@@ -65,12 +65,30 @@ class ImageGenerator:
                     logger.error("This will open a browser to sign in with your Google account.")
                     logger.error("Make sure you use the same account that has access to project: " + str(self.project_id))
                     logger.error("=" * 60)
+                elif "SERVICE_DISABLED" in error_str or "quota project" in error_str.lower():
+                    logger.error("=" * 60)
+                    logger.error("QUOTA PROJECT & API ENABLING REQUIRED")
+                    logger.error("=" * 60)
+                    logger.error("Two issues detected:")
+                    logger.error("")
+                    logger.error("1. QUOTA PROJECT NOT SET:")
+                    logger.error(f"   Run: gcloud auth application-default set-quota-project {self.project_id}")
+                    logger.error("")
+                    logger.error("2. VERTEX AI API NOT ENABLED:")
+                    logger.error("   The Vertex AI API must be enabled in Google Cloud Console:")
+                    logger.error("   - Go to: https://console.cloud.google.com/apis/library/aiplatform.googleapis.com")
+                    logger.error(f"   - Select project: {self.project_id}")
+                    logger.error("   - Click 'Enable'")
+                    logger.error("")
+                    logger.error("After enabling the API, restart your backend server.")
+                    logger.error("=" * 60)
                 else:
                     logger.error("Common issues:")
                     logger.error("  1. Vertex AI API not enabled in Google Cloud Console")
                     logger.error("  2. Billing not enabled for the project")
                     logger.error("  3. Authentication failed - run: gcloud auth application-default login")
                     logger.error("  4. Missing IAM permissions - need 'Vertex AI User' role")
+                    logger.error("  5. Quota project not set - run: gcloud auth application-default set-quota-project PROJECT_ID")
                 self.enabled = False
         else:
             self.enabled = False
