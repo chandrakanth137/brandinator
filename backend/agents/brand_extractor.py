@@ -272,18 +272,20 @@ class BrandExtractionAgent:
                 print("✓ Brand identity extracted successfully with LLM")
             except Exception as e:
                 error_msg = str(e)
-                if "quota" in error_msg.lower() or "429" in error_msg:
+                if "quota" in error_msg.lower() or "429" in error_msg or "insufficient_quota" in error_msg:
                     print(f"LLM quota exceeded: {e}")
                     print("  Trying to reinitialize with alternative provider...")
-                    # Try to reinitialize with alternative
-                    self.llm = self._initialize_llm()
-                    if self.llm:
+                    # Try to reinitialize with alternative (skip the one that failed)
+                    original_llm = self.llm
+                    self.llm = self._initialize_llm_with_skip(original_llm)
+                    if self.llm and self.llm != original_llm:
                         try:
                             response = self.llm.invoke([HumanMessage(content=prompt)])
                             content = response.content if hasattr(response, 'content') else str(response)
                             brand_json = self._parse_llm_response(content)
                             print("✓ Brand identity extracted with alternative LLM")
-                        except:
+                        except Exception as e2:
+                            print(f"Alternative LLM also failed: {e2}")
                             brand_json = self._fallback_extraction(context)
                     else:
                         brand_json = self._fallback_extraction(context)
