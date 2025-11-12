@@ -28,21 +28,21 @@ class ImageGenerator:
         # Create downloads directory
         self.downloads_dir = Path("generated_images")
         self.downloads_dir.mkdir(exist_ok=True)
-        print(f"✓ Images will be saved to: {self.downloads_dir.absolute()}")
+        logger.info(f"Images will be saved to: {self.downloads_dir.absolute()}")
         
         if api_key and genai:
             try:
                 genai.configure(api_key=api_key)
                 self.model = genai.GenerativeModel(model_name="gemini-2.5-flash-image")
                 self.enabled = True
-                print("✓ Gemini image generation enabled")
+                logger.info("Gemini image generation enabled")
             except Exception as e:
-                print(f"Error initializing Google AI: {e}")
+                logger.error(f"Error initializing Google AI: {e}")
                 self.enabled = False
         else:
             self.enabled = False
             if not api_key:
-                print("GEMINI_IMAGE_API_KEY not found, image generation will be mocked")
+                logger.warning("GEMINI_IMAGE_API_KEY not found, image generation will be mocked")
     
     def generate(
         self,
@@ -57,19 +57,21 @@ class ImageGenerator:
         if self.enabled:
             try:
                 # Use Google Gemini Nano Banana for image generation
-                print(f"Generating image with prompt: {style_prompt[:500]}...") # Log full prompt
+                logger.info(f"Generating image with prompt: {style_prompt[:500]}...")
+                logger.debug(f"Full prompt: {style_prompt}")
                 response = self.model.generate_content(style_prompt)
                 
                 # Process the response to extract image data
                 image_url = self._process_response(response)
                 if image_url:
+                    logger.info("Image generated successfully")
                     return image_url
                 else:
-                    print("Could not extract image from response, using mock")
-                    print(f"Raw API response (if available): {response}") # Log raw response
+                    logger.warning("Could not extract image from response, using mock")
+                    logger.debug(f"Raw API response (if available): {response}")
                     return self._mock_generate(style_prompt)
             except Exception as e:
-                print(f"Error generating image: {e}")
+                logger.error(f"Error generating image: {e}", exc_info=True)
                 return self._mock_generate(style_prompt)
         else:
             # Return mock image URL
@@ -162,30 +164,30 @@ class ImageGenerator:
             # Check if response has image data
             if hasattr(response, 'candidates') and response.candidates:
                 candidate = response.candidates[0]
-                print(f"Processing candidate: {type(candidate)}")
+                logger.debug(f"Processing candidate: {type(candidate)}")
                 
                 # Check for image in content
                 if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
-                    print(f"Found {len(candidate.content.parts)} parts in content")
+                    logger.debug(f"Found {len(candidate.content.parts)} parts in content")
                     for idx, part in enumerate(candidate.content.parts):
-                        print(f"Part {idx}: {type(part)}, attributes: {[attr for attr in dir(part) if not attr.startswith('_')]}")
+                        logger.debug(f"Part {idx}: {type(part)}, attributes: {[attr for attr in dir(part) if not attr.startswith('_')]}")
                         
                         # Check if part contains image data
                         if hasattr(part, 'inline_data'):
                             inline_data = part.inline_data
-                            print(f"Found inline_data: {type(inline_data)}")
+                            logger.debug(f"Found inline_data: {type(inline_data)}")
                             
                             # Image is base64 encoded
                             if hasattr(inline_data, 'data'):
                                 image_data_b64 = inline_data.data
-                                print(f"Image data length: {len(image_data_b64) if image_data_b64 else 0} characters")
+                                logger.info(f"Image data length: {len(image_data_b64) if image_data_b64 else 0} characters")
                             else:
-                                print("inline_data has no 'data' attribute")
+                                logger.warning("inline_data has no 'data' attribute")
                                 continue
                                 
                             if hasattr(inline_data, 'mime_type'):
                                 mime_type = inline_data.mime_type or "image/png"
-                                print(f"MIME type: {mime_type}")
+                                logger.info(f"MIME type: {mime_type}")
                             
                             # Validate and decode base64
                             if image_data_b64:
@@ -196,29 +198,27 @@ class ImageGenerator:
                                         image_data_b64 += '=' * (4 - missing_padding)
                                     
                                     image_bytes = base64.b64decode(image_data_b64, validate=True)
-                                    print(f"✓ Successfully decoded image: {len(image_bytes)} bytes, type: {mime_type}")
+                                    logger.info(f"Successfully decoded image: {len(image_bytes)} bytes, type: {mime_type}")
                                     
                                     # Validate it's actually an image by checking headers
                                     if len(image_bytes) < 10:
-                                        print("⚠ Warning: Image data too small")
+                                        logger.warning("Image data too small")
                                         continue
                                     
                                     # Save image locally
                                     file_path = self._save_image(image_bytes, mime_type)
-                                    print(f"✓ Image saved to: {file_path}")
+                                    logger.info(f"Image saved to: {file_path}")
                                     
                                     # Return as data URL (use original base64, not re-encoded)
                                     return f"data:{mime_type};base64,{image_data_b64}"
                                 except Exception as decode_error:
-                                    print(f"Error decoding base64 image data: {decode_error}")
-                                    import traceback
-                                    traceback.print_exc()
+                                    logger.error(f"Error decoding base64 image data: {decode_error}", exc_info=True)
                                     continue
                         elif hasattr(part, 'text'):
                             # Sometimes the response might contain a URL or reference
                             text = part.text
                             if text and text.startswith('http'):
-                                print(f"✓ Received image URL: {text}")
+                                logger.info(f"Received image URL: {text}")
                                 return text
             
             # Alternative: check if response has direct image data
@@ -229,30 +229,27 @@ class ImageGenerator:
                     return response.text
             
             # If we can't extract image, return None to use mock
-            print("⚠ Warning: Could not extract image from API response")
-            print(f"Response structure: {type(response)}")
+            logger.warning("Could not extract image from API response")
+            logger.debug(f"Response structure: {type(response)}")
             if hasattr(response, '__dict__'):
-                print(f"Response attributes: {list(response.__dict__.keys())}")
+                logger.debug(f"Response attributes: {list(response.__dict__.keys())}")
             
-            # Try to print more details about the response
+            # Try to log more details about the response
             try:
-                import json
                 if hasattr(response, 'candidates'):
-                    print(f"Candidates: {len(response.candidates)}")
+                    logger.debug(f"Candidates: {len(response.candidates)}")
                     if response.candidates:
                         candidate = response.candidates[0]
-                        print(f"Candidate attributes: {dir(candidate)}")
+                        logger.debug(f"Candidate attributes: {[attr for attr in dir(candidate) if not attr.startswith('_')]}")
                         if hasattr(candidate, 'content'):
-                            print(f"Content attributes: {dir(candidate.content)}")
-            except:
-                pass
+                            logger.debug(f"Content attributes: {[attr for attr in dir(candidate.content) if not attr.startswith('_')]}")
+            except Exception as e:
+                logger.debug(f"Error logging response details: {e}")
             
             return None
             
         except Exception as e:
-            print(f"Error processing response: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"Error processing response: {e}", exc_info=True)
             return None
     
     def _save_image(self, image_bytes: bytes, mime_type: str) -> Path:
