@@ -225,60 +225,39 @@ with col2:
             
             st.markdown("### Generated Image")
             
-            # Display the image
+            # Display the image - handle both data URLs and regular URLs
             try:
-                st.image(image_url, caption="Generated Image", width='stretch')
+                if image_url.startswith('data:'):
+                    # For data URLs, try using HTML img tag as it's more reliable
+                    # Extract MIME type for proper display
+                    try:
+                        header = image_url.split(',')[0]
+                        mime_type = header.split(';')[0].split(':')[1]
+                    except:
+                        mime_type = 'image/png'
+                    
+                    # Use HTML img tag for data URLs (more reliable in Streamlit)
+                    st.markdown(
+                        f'<img src="{image_url}" alt="Generated Image" style="max-width: 100%; height: auto; border-radius: 8px;" />',
+                        unsafe_allow_html=True
+                    )
+                else:
+                    # For regular URLs, use st.image
+                    st.image(image_url, caption="Generated Image", width='stretch')
             except Exception as e:
                 st.error(f"Error displaying image: {str(e)}")
-                st.info("The image URL was generated but could not be displayed. Check the URL below.")
-            
-            # Download button - Handle both data URLs and regular URLs
-            if image_url.startswith('data:'):
-                # For data URLs, use HTML download link (more reliable than st.download_button)
-                # Extract file extension from MIME type
+                # Try alternative display method
                 try:
-                    header = image_url.split(',')[0]
-                    mime_type = header.split(';')[0].split(':')[1]
-                    file_extension = mime_type.split('/')[1] if '/' in mime_type else 'png'
+                    st.markdown(
+                        f'<img src="{image_url}" alt="Generated Image" style="max-width: 100%; height: auto;" />',
+                        unsafe_allow_html=True
+                    )
                 except:
-                    file_extension = 'png'
-                
-                # Create a styled download link using HTML
-                st.markdown(
-                    f'''
-                    <a href="{image_url}" download="generated_image.{file_extension}" 
-                       style="display: inline-block; padding: 0.5rem 1rem; background-color: #1f77b4; color: white; text-decoration: none; border-radius: 0.25rem; cursor: pointer; width: 100%; text-align: center;">
-                       📥 Download Image
-                    </a>
-                    ''',
-                    unsafe_allow_html=True
-                )
-            else:
-                # Regular URL - provide download link
-                try:
-                    # Try to fetch the image and provide download
-                    img_response = requests.get(image_url, timeout=10)
-                    if img_response.status_code == 200:
-                        # Determine file extension from URL or content type
-                        content_type = img_response.headers.get('content-type', 'image/png')
-                        file_extension = content_type.split('/')[1] if '/' in content_type else 'png'
-                        
-                        st.download_button(
-                            label="📥 Download Image",
-                            data=img_response.content,
-                            file_name=f"generated_image.{file_extension}",
-                            mime=content_type,
-                            width='stretch'
-                        )
-                    else:
-                        st.markdown(f"[🔗 View Full Image]({image_url})")
-                except Exception as e:
-                    # If we can't fetch, just provide the link
-                    st.markdown(f"[🔗 View Full Image]({image_url})")
+                    st.info("The image URL was generated but could not be displayed. Check the URL below.")
             
-            # Also show the URL for reference
-            with st.expander("🔗 Image URL"):
-                st.code(image_url, language=None)
+            # Show the URL for reference (download can be done via right-click on image)
+            with st.expander("🔗 Image URL (for reference)"):
+                st.code(image_url[:200] + "..." if len(image_url) > 200 else image_url, language=None)
 
 # Footer
 st.markdown("---")
