@@ -115,12 +115,12 @@ class WebScraper:
                 # Check if we got a protection page
                 if self._is_protection_page(result.get('title', ''), result.get('text', '')):
                     print("Detected protection page, waiting longer and retrying with Playwright...")
-                    # Retry with longer wait
+                    # Retry with much longer wait (15 seconds initial + 20 seconds for resolution)
                     if loop and loop.is_running():
-                        future = self.executor.submit(self._scrape_with_playwright, url, wait_time=10000)
-                        result = future.result(timeout=90)
+                        future = self.executor.submit(self._scrape_with_playwright, url, wait_time=15000)
+                        result = future.result(timeout=120)  # 2 minute timeout
                     else:
-                        result = self._scrape_with_playwright(url, wait_time=10000)
+                        result = self._scrape_with_playwright(url, wait_time=15000)
                 
                 return result
             except Exception as e:
@@ -146,10 +146,14 @@ class WebScraper:
         """Scrape using Playwright (handles JavaScript-rendered content)."""
         page = self.browser.new_page()
         try:
-            # Set realistic viewport and user agent
+            # Set realistic viewport and user agent to appear more human-like
             page.set_viewport_size({"width": 1920, "height": 1080})
             page.set_extra_http_headers({
                 'Accept-Language': 'en-US,en;q=0.9',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
             })
             
             # Navigate to the page
@@ -160,17 +164,60 @@ class WebScraper:
             
             # Check if we're on a protection page and wait for it to resolve
             page_title = page.title()
-            if 'just a moment' in page_title.lower() or 'checking' in page_title.lower():
-                print("Waiting for protection page to resolve...")
-                # Wait up to 15 seconds for protection page to resolve
+            page_content = page.content()
+            
+            # More comprehensive protection page detection
+            is_protection = (
+                'just a moment' in page_title.lower() or 
+                'checking' in page_title.lower() or
+                'cloudflare' in page_content.lower()[:1000] or
+                'cf-browser-verification' in page_content.lower()
+            )
+            
+            if is_protection:
+                print("Waiting for protection page to resolve (this may take 10-20 seconds)...")
+                # Try multiple strategies to wait for protection to resolve
+                max_wait = 20000  # 20 seconds
+                start_time = page.evaluate("Date.now()")
+                
                 try:
+                    # Strategy 1: Wait for title to change
                     page.wait_for_function(
-                        "document.title.toLowerCase().indexOf('just a moment') === -1 && document.title.toLowerCase().indexOf('checking') === -1",
-                        timeout=15000
+                        """
+                        () => {
+                            const title = document.title.toLowerCase();
+                            return title.indexOf('just a moment') === -1 && 
+                                   title.indexOf('checking') === -1 &&
+                                   title.length > 5;
+                        }
+                        """,
+                        timeout=max_wait
                     )
-                    page.wait_for_timeout(2000)  # Additional wait after resolution
-                except:
-                    print("Protection page may not have resolved, continuing anyway...")
+                    
+                    # Strategy 2: Wait for body content to appear (not just Cloudflare)
+                    page.wait_for_function(
+                        """
+                        () => {
+                            const body = document.body.innerText.toLowerCase();
+                            return body.length > 100 && 
+                                   body.indexOf('just a moment') === -1 &&
+                                   body.indexOf('checking your browser') === -1;
+                        }
+                        """,
+                        timeout=5000
+                    )
+                    
+                    # Additional wait after resolution
+                    page.wait_for_timeout(3000)
+                    print("Protection page resolved!")
+                except Exception as e:
+                    print(f"Protection page wait timeout: {e}")
+                    # Try one more time with a simple wait
+                    page.wait_for_timeout(5000)
+                    # Check again
+                    final_title = page.title()
+                    if 'just a moment' in final_title.lower() or 'checking' in final_title.lower():
+                        print("Warning: Protection page may not have fully resolved")
             
             # Get page content
             html = page.content()
