@@ -46,6 +46,15 @@ class BrandExtractionAgent:
         # Step 1: Scrape the main website
         print(f"Scraping website: {url}")
         scraped_data = self.web_scraper.scrape(url)
+        
+        # Check if we got useful data
+        if scraped_data.get('error'):
+            print(f"Warning: Scraping error: {scraped_data.get('error')}")
+        title = scraped_data.get('title', '').lower()
+        if not title or title in ['just a moment', 'checking your browser', 'please wait']:
+            print("Warning: May have hit a protection page. Consider installing Playwright browsers:")
+            print("  uv run playwright install chromium")
+        
         source_pages.append(SourcePage(
             url=url,
             used_for=["mission", "vision", "palette", "style"]
