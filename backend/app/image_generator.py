@@ -181,6 +181,9 @@ class ImageGenerator:
                             # Image is base64 encoded
                             if hasattr(inline_data, 'data'):
                                 image_data_b64 = inline_data.data
+                                # Convert bytes to string if needed
+                                if isinstance(image_data_b64, bytes):
+                                    image_data_b64 = image_data_b64.decode('utf-8')
                                 logger.info(f"Image data length: {len(image_data_b64) if image_data_b64 else 0} characters")
                             else:
                                 logger.warning("inline_data has no 'data' attribute")
@@ -193,7 +196,7 @@ class ImageGenerator:
                             # Validate and decode base64
                             if image_data_b64:
                                 try:
-                                    # Fix padding if needed
+                                    # Fix padding if needed (base64 strings must be multiples of 4)
                                     missing_padding = len(image_data_b64) % 4
                                     if missing_padding:
                                         image_data_b64 += '=' * (4 - missing_padding)
@@ -223,11 +226,19 @@ class ImageGenerator:
                                 return text
             
             # Alternative: check if response has direct image data
-            if hasattr(response, 'text'):
-                # If response.text contains a URL
-                if response.text.startswith('http'):
-                    logger.info(f"Received image URL from response.text: {response.text}")
-                    return response.text
+            # Only try to access response.text if we haven't found inline_data
+            # (accessing text when there's inline_data raises an error)
+            try:
+                if hasattr(response, 'text'):
+                    response_text = response.text
+                    # If response.text contains a URL
+                    if response_text and response_text.startswith('http'):
+                        logger.info(f"Received image URL from response.text: {response_text}")
+                        return response_text
+            except (ValueError, AttributeError) as e:
+                # This is expected when response contains inline_data instead of text
+                logger.debug(f"Response.text not available (likely has inline_data): {e}")
+                pass
             
             # If we can't extract image, return None to use mock
             logger.warning("Could not extract image from API response")
