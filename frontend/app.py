@@ -3,6 +3,7 @@ import streamlit as st
 import requests
 import json
 import base64
+import io
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -245,10 +246,18 @@ with col2:
                     if missing_padding:
                         data += '=' * (4 - missing_padding)
                     
-                    # Decode base64
-                    image_bytes = base64.b64decode(data, validate=True)
+                    # Decode base64 to bytes
+                    try:
+                        image_bytes = base64.b64decode(data, validate=True)
+                    except Exception as decode_error:
+                        # If validation fails, try without validation
+                        image_bytes = base64.b64decode(data)
                     
-                    # Create download button
+                    # Ensure we have bytes, not string
+                    if isinstance(image_bytes, str):
+                        image_bytes = image_bytes.encode('utf-8')
+                    
+                    # Create download button with bytes
                     st.download_button(
                         label="📥 Download Image",
                         data=image_bytes,
@@ -257,8 +266,13 @@ with col2:
                         width='stretch'
                     )
                 except Exception as e:
+                    # Fallback: provide download link using HTML
                     st.warning(f"Could not create download button: {e}")
-                    st.markdown(f"[🔗 View Full Image]({image_url})")
+                    # Create a download link using HTML
+                    st.markdown(
+                        f'<a href="{image_url}" download="generated_image.{file_extension}" style="display: inline-block; padding: 0.5rem 1rem; background-color: #1f77b4; color: white; text-decoration: none; border-radius: 0.25rem;">📥 Download Image</a>',
+                        unsafe_allow_html=True
+                    )
             else:
                 # Regular URL - provide download link
                 try:
