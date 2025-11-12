@@ -67,17 +67,52 @@ class BrandExtractionAgent:
             used_for=["mission", "vision", "palette", "style"]
         ))
         
-        # Step 2: Extract color palette from images
-        print("Extracting color palette...")
+        # Step 2: Extract color palette from website CSS and images
+        print("Extracting color palette from website...")
         colors = []
-        if scraped_data.get('images'):
-            # Try to extract colors from first few images
-            for img in scraped_data['images'][:3]:
-                try:
-                    img_colors = self.color_extractor.extract_from_url(img['url'])
-                    colors.extend(img_colors)
-                except Exception as e:
-                    print(f"Error extracting colors from {img['url']}: {e}")
+        
+        # First, extract colors from CSS/styles (background, text, brand colors)
+        html_content = scraped_data.get('html', '')
+        if html_content:
+            try:
+                # Extract from CSS
+                css_colors = self.color_extractor.extract_from_css(html_content)
+                if css_colors:
+                    colors.extend(css_colors)
+                    print(f"  Found {len(css_colors)} colors from CSS")
+            except Exception as e:
+                print(f"Error extracting colors from CSS: {e}")
+        
+        # Add computed colors from Playwright if available
+        if scraped_data.get('background_color'):
+            bg_hex = self.color_extractor._parse_color_value(scraped_data['background_color'])
+            if bg_hex:
+                colors.append({
+                    'name': 'background',
+                    'hex': bg_hex,
+                    'source': 'computed_background'
+                })
+        if scraped_data.get('text_color'):
+            text_hex = self.color_extractor._parse_color_value(scraped_data['text_color'])
+            if text_hex:
+                colors.append({
+                    'name': 'text',
+                    'hex': text_hex,
+                    'source': 'computed_text'
+                })
+        
+        # Also extract colors from images (for additional brand colors)
+        if scraped_data.get('images') and len(colors) < 5:  # Only if we don't have enough colors
+            try:
+                # Try to extract colors from first few images
+                for img in scraped_data.get('images', [])[:2]:
+                    try:
+                        img_colors = self.color_extractor.extract_from_url(img['url'])
+                        colors.extend(img_colors)
+                    except Exception as e:
+                        print(f"Error extracting colors from {img['url']}: {e}")
+            except Exception as e:
+                print(f"Error extracting colors from images: {e}")
         
         # Step 3: Analyze visual style
         print("Analyzing visual style...")
