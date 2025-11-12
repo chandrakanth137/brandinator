@@ -85,14 +85,18 @@ class BrandExtractionAgent:
         else:
             search_results = []
         
-        # Step 5: Use LLM to generate structured brand identity
-        print("Generating brand identity JSON...")
+        # Step 5: Use LLM to generate structured brand identity with intelligent analysis
+        print("Analyzing content and generating brand identity JSON with LLM...")
         brand_identity = self._generate_brand_identity(
             scraped_data=scraped_data,
             search_results=search_results,
             colors=colors,
             style_analysis=style_analysis
         )
+        
+        # If LLM is not available, use enhanced fallback
+        if not self.llm:
+            print("LLM not available, using enhanced fallback extraction...")
         
         # Add metadata
         brand_identity.metadata.source_pages = source_pages
@@ -136,35 +140,73 @@ class BrandExtractionAgent:
         return brand_json
     
     def _create_extraction_prompt(self, context: Dict[str, Any]) -> str:
-        """Create prompt for brand extraction."""
-        return f"""You are a brand identity extraction expert. Analyze the following website data and extract a comprehensive brand identity.
+        """Create prompt for brand extraction with intelligent inference."""
+        return f"""You are an expert brand identity analyst. Your task is to analyze the provided website content and intelligently extract a comprehensive brand identity. You must INFER and ANALYZE brand characteristics even if they are not explicitly stated.
 
-Website Title: {context['website_title']}
-Website Description: {context['website_description']}
-Website Text (excerpt): {context['website_text']}
+IMPORTANT: Use your analytical skills to infer brand values, personality, vision, and style from the overall content, tone, messaging, and visual elements. Don't just look for explicit statements - analyze what the brand communicates through its content.
 
-Search Results:
-{json.dumps(context['search_results'], indent=2)}
+Website Data:
+Title: {context['website_title']}
+Description: {context['website_description']}
+Content Excerpt: {context['website_text']}
 
-Color Palette:
-{json.dumps(context['colors'], indent=2)}
+Additional Context:
+Search Results: {json.dumps(context['search_results'], indent=2)}
+Extracted Colors: {json.dumps(context['colors'], indent=2)}
+Style Analysis: {json.dumps(context['style_analysis'], indent=2)}
 
-Style Analysis:
-{json.dumps(context['style_analysis'], indent=2)}
+ANALYSIS INSTRUCTIONS:
 
-Extract and return a complete Brand Identity JSON with the following structure:
+1. **Brand Name**: Extract the clean brand name (remove taglines, remove "|", "-", etc.)
+
+2. **Brand Mission**: Analyze the content to infer the brand's mission. Look for:
+   - What problem they solve
+   - Who they serve
+   - What value they provide
+   - Their core purpose
+   If not explicit, synthesize from their messaging and value propositions.
+
+3. **Brand Vision**: Infer the brand's vision by analyzing:
+   - Future aspirations mentioned
+   - Long-term goals
+   - What they want to achieve
+   - Their ideal future state
+   Synthesize from content even if not explicitly stated as "vision".
+
+4. **Brand Personality**: Analyze the tone, language, and messaging to infer personality traits:
+   - Professional, friendly, innovative, trustworthy, bold, creative, etc.
+   - Extract 3-5 traits that best describe the brand's character
+   - Base this on how they communicate, not just explicit mentions
+
+5. **Image Style**: Analyze the brand's visual identity:
+   - Style: modern, minimalist, bold, elegant, playful, etc.
+   - Keywords: Extract relevant style keywords from content
+   - Temperature: warm, cool, or neutral based on color palette and tone
+   - People/Ethnicity: Infer from content if they show diverse representation
+   - Occupation: What types of people/roles are featured or implied
+   - Props: What objects/elements are associated with the brand
+   - Environment: What settings/contexts are shown or implied
+
+6. **Color Palette**: Use the extracted colors and assign them meaningfully:
+   - Primary: Most prominent brand color
+   - Secondary: Supporting brand color
+   - Support colors: Additional brand colors
+   - Positive: Color used for positive actions/CTAs
+   - Background: Typical background color
+
+Return a complete Brand Identity JSON:
 {{
   "brand_details": {{
-    "brand_name": "extracted brand name",
-    "brand_mission": "mission statement",
-    "brand_vision": "vision statement",
-    "brand_personality": ["trait1", "trait2", "trait3"]
+    "brand_name": "clean brand name only",
+    "brand_mission": "inferred mission statement based on content analysis",
+    "brand_vision": "inferred vision statement based on content analysis",
+    "brand_personality": ["trait1", "trait2", "trait3", "trait4"]
   }},
   "image_style": {{
-    "style": "visual style description",
-    "keywords": ["keyword1", "keyword2"],
+    "style": "inferred visual style",
+    "keywords": ["keyword1", "keyword2", "keyword3"],
     "temperature": "warm|cool|neutral",
-    "people_ethnicity": "diverse representation",
+    "people_ethnicity": "diverse|specific|not specified",
     "occupation": ["occupation1", "occupation2"],
     "props": ["prop1", "prop2"],
     "environment": ["env1", "env2"],
@@ -180,7 +222,7 @@ Extract and return a complete Brand Identity JSON with the following structure:
   }}
 }}
 
-Return ONLY valid JSON, no additional text."""
+CRITICAL: Return ONLY valid JSON. No markdown, no explanations, no additional text. Just the JSON object."""
 
     def _parse_llm_response(self, response: str) -> BrandIdentity:
         """Parse LLM response into BrandIdentity model."""
@@ -239,27 +281,52 @@ Return ONLY valid JSON, no additional text."""
         if not brand_name or len(brand_name) < 2:
             brand_name = "Unknown Brand"
         
-        # Extract mission and vision from text
+        # Extract mission - analyze content to infer mission
         mission = website_description[:300] if website_description else ""
         if not mission and website_text:
-            # Try to find mission-like content (first paragraph or sentences with keywords)
+            # Try to find mission-like content by analyzing value propositions
+            text_lower = website_text.lower()
+            mission_keywords = ['mission', 'purpose', 'help', 'enable', 'empower', 'build', 'create', 'provide']
+            
+            # Look for sentences with mission-related keywords
             sentences = website_text.split('.')
-            mission_candidates = [s.strip() for s in sentences[:3] if len(s.strip()) > 20]
-            mission = '. '.join(mission_candidates[:2])[:300] if mission_candidates else ""
+            mission_candidates = []
+            for sentence in sentences[:10]:  # Check first 10 sentences
+                sentence_lower = sentence.lower()
+                if any(kw in sentence_lower for kw in mission_keywords) and len(sentence.strip()) > 30:
+                    mission_candidates.append(sentence.strip())
+            
+            if mission_candidates:
+                mission = '. '.join(mission_candidates[:2])[:300]
+            else:
+                # Synthesize from first meaningful sentences
+                meaningful = [s.strip() for s in sentences[:5] if len(s.strip()) > 40]
+                if meaningful:
+                    mission = '. '.join(meaningful[:2])[:300]
         
+        # Extract vision - infer from future-oriented language
         vision = ""
         if website_text:
-            # Look for vision-related keywords
             text_lower = website_text.lower()
-            vision_keywords = ['vision', 'future', 'goal', 'aspire', 'believe']
-            for keyword in vision_keywords:
-                if keyword in text_lower:
-                    # Find sentence containing keyword
-                    for sentence in website_text.split('.'):
-                        if keyword in sentence.lower() and len(sentence.strip()) > 30:
-                            vision = sentence.strip()[:300]
-                            break
-                    if vision:
+            vision_keywords = ['vision', 'future', 'goal', 'aspire', 'believe', 'imagine', 'envision', 'strive', 'aim']
+            
+            # Look for vision-related content
+            sentences = website_text.split('.')
+            vision_candidates = []
+            for sentence in sentences:
+                sentence_lower = sentence.lower()
+                if any(kw in sentence_lower for kw in vision_keywords) and len(sentence.strip()) > 30:
+                    vision_candidates.append(sentence.strip())
+            
+            if vision_candidates:
+                vision = '. '.join(vision_candidates[:2])[:300]
+            else:
+                # Try to infer from aspirational language
+                aspirational_keywords = ['better', 'best', 'leading', 'transform', 'revolutionize', 'innovate']
+                for sentence in sentences[:15]:
+                    sentence_lower = sentence.lower()
+                    if any(kw in sentence_lower for kw in aspirational_keywords) and len(sentence.strip()) > 40:
+                        vision = sentence.strip()[:300]
                         break
         
         # Extract colors
@@ -281,24 +348,43 @@ Return ONLY valid JSON, no additional text."""
             if len(colors) > 6:
                 color_palette.background = ColorInfo(name=colors[6].get('name', ''), hex=colors[6].get('hex', ''))
         
-        # Extract personality traits from text
+        # Extract personality traits by analyzing tone and content
         personality = []
         if website_text:
             text_lower = website_text.lower()
+            full_text = (website_title + ' ' + website_description + ' ' + website_text).lower()
+            
+            # Expanded trait analysis
             trait_keywords = {
-                'innovative': ['innovative', 'innovation', 'creative', 'cutting-edge'],
-                'professional': ['professional', 'expert', 'expertise', 'quality'],
-                'modern': ['modern', 'contemporary', 'current', 'today'],
-                'trustworthy': ['trust', 'reliable', 'dependable', 'secure'],
-                'friendly': ['friendly', 'welcoming', 'approachable', 'accessible'],
-                'ambitious': ['ambitious', 'bold', 'visionary', 'forward-thinking']
+                'innovative': ['innovative', 'innovation', 'creative', 'cutting-edge', 'breakthrough', 'pioneer'],
+                'professional': ['professional', 'expert', 'expertise', 'quality', 'enterprise', 'business'],
+                'modern': ['modern', 'contemporary', 'current', 'today', 'next-gen', 'next generation'],
+                'trustworthy': ['trust', 'reliable', 'dependable', 'secure', 'safe', 'trusted'],
+                'friendly': ['friendly', 'welcoming', 'approachable', 'accessible', 'easy', 'simple'],
+                'ambitious': ['ambitious', 'bold', 'visionary', 'forward-thinking', 'transform'],
+                'fast': ['fast', 'speed', 'quick', 'instant', 'rapid', 'performance'],
+                'collaborative': ['collaborate', 'team', 'together', 'community', 'partnership'],
+                'user-focused': ['user', 'customer', 'developer', 'people-first', 'human-centered']
             }
+            
             for trait, keywords in trait_keywords.items():
-                if any(kw in text_lower for kw in keywords):
+                if any(kw in full_text for kw in keywords):
                     personality.append(trait)
+            
+            # Analyze tone
+            if '!' in website_text[:500] or 'amazing' in text_lower or 'awesome' in text_lower:
+                if 'energetic' not in personality:
+                    personality.append('energetic')
+            
+            if 'secure' in text_lower or 'privacy' in text_lower or 'safe' in text_lower:
+                if 'trustworthy' not in personality:
+                    personality.append('trustworthy')
         
         if not personality:
             personality = ["professional", "modern", "innovative"]
+        else:
+            # Limit to 5 most relevant traits
+            personality = personality[:5]
         
         # Create brand identity
         brand_identity = BrandIdentity(
