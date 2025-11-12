@@ -78,7 +78,7 @@ brandinator/
    Required API keys (optional for basic functionality):
 
    - `OPENAI_API_KEY`: For LangChain agent (optional, has fallback)
-   - `GOOGLE_API_KEY`: For image generation only (optional, mocked if not available)
+   - `GEMINI_API_KEY`: For image generation using Gemini Nano Banana (optional, mocked if not available)
 
    **Install Playwright browsers** (required for web scraping and Google search):
 
