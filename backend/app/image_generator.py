@@ -155,101 +155,198 @@ class ImageGenerator:
         brand_identity: BrandIdentity,
         user_prompt: str
     ) -> str:
-        """Build a prompt with visual style transfer - colors and aesthetic only, no brand text."""
+        """
+        Build an AI image generation prompt that blends user input with brand visual style.
+        
+        This function creates a detailed prompt that:
+        1. Starts with the user's desired content
+        2. Applies the brand's color palette
+        3. Adds the brand's visual aesthetic and style
+        4. Maintains brand personality through visual descriptors
+        
+        The result is an image that matches what the user wants, styled in the brand's colors and aesthetic.
+        
+        Args:
+            brand_identity: Extracted brand identity with colors, style, personality
+            user_prompt: What the user wants to see (e.g., "nurse teaching IV setup")
+            
+        Returns:
+            A comprehensive prompt for image generation
+        """
         brand = brand_identity.brand_details
         style = brand_identity.image_style
         
-        # Start with the user's prompt as the core content
-        prompt_parts = [user_prompt]
+        # === SECTION 1: CORE CONTENT (User's Request) ===
+        # Start with what the user wants - this is the main subject
+        prompt_parts = [f"Create a high-quality image: {user_prompt}"]
         
-        # Extract personality traits as visual adjectives (not branded)
+        # === SECTION 2: VISUAL PERSONALITY ===
+        # Convert brand personality to visual/aesthetic descriptors
         if brand.brand_personality:
-            # Convert personality to visual descriptors
-            visual_traits = []
-            for trait in brand.brand_personality:
-                trait_lower = trait.lower()
-                if 'professional' in trait_lower:
-                    visual_traits.append('clean and polished')
-                elif 'modern' in trait_lower:
-                    visual_traits.append('contemporary and sleek')
-                elif 'innovative' in trait_lower:
-                    visual_traits.append('cutting-edge and forward-thinking')
-                elif 'friendly' in trait_lower:
-                    visual_traits.append('warm and approachable')
-                elif 'luxurious' in trait_lower or 'premium' in trait_lower:
-                    visual_traits.append('elegant and high-end')
-                elif 'playful' in trait_lower or 'fun' in trait_lower:
-                    visual_traits.append('vibrant and energetic')
-                elif 'trustworthy' in trait_lower or 'reliable' in trait_lower:
-                    visual_traits.append('solid and dependable')
-                elif 'creative' in trait_lower:
-                    visual_traits.append('artistic and imaginative')
-                else:
-                    visual_traits.append(trait_lower)
-            
+            visual_traits = self._personality_to_visual(brand.brand_personality)
             if visual_traits:
-                prompt_parts.append(f"Style: {', '.join(visual_traits)}")
+                prompt_parts.append(f"Visual style: {', '.join(visual_traits)} aesthetic")
         
-        # Add visual style specifications
+        # === SECTION 3: ARTISTIC STYLE ===
+        # Overall artistic direction from the brand
         if style.style:
-            prompt_parts.append(f"Aesthetic: {style.style}")
+            prompt_parts.append(f"Art direction: {style.style} style")
         
+        # Visual keywords (filtered to remove brand-specific terms)
         if style.keywords:
-            # Filter out brand-specific keywords, keep visual ones
-            visual_keywords = [kw for kw in style.keywords if kw.lower() not in ['brand', 'logo', 'company']]
+            visual_keywords = [kw for kw in style.keywords 
+                             if kw.lower() not in ['brand', 'logo', 'company', 'trademark']]
             if visual_keywords:
-                prompt_parts.append(f"Visual elements: {', '.join(visual_keywords)}")
+                prompt_parts.append(f"Visual theme: {', '.join(visual_keywords)}")
         
+        # === SECTION 4: COLOR PALETTE (Most Important for Brand Matching) ===
+        color_instruction = self._build_color_instruction(style.color_palette)
+        if color_instruction:
+            prompt_parts.append(color_instruction)
+        
+        # Color temperature for overall mood
         if style.temperature:
-            prompt_parts.append(f"Color temperature: {style.temperature}")
+            temp_desc = {
+                'warm': 'warm, inviting tones',
+                'cool': 'cool, professional tones',
+                'neutral': 'balanced, neutral tones'
+            }.get(style.temperature.lower(), style.temperature)
+            prompt_parts.append(f"Color mood: {temp_desc}")
         
-        # Color palette - the key element for style transfer
-        color_palette = []
-        if style.color_palette.primary.hex:
-            color_palette.append(style.color_palette.primary.hex)
-        if style.color_palette.secondary.hex:
-            color_palette.append(style.color_palette.secondary.hex)
-        if style.color_palette.support_1.hex:
-            color_palette.append(style.color_palette.support_1.hex)
-        if style.color_palette.support_2.hex:
-            color_palette.append(style.color_palette.support_2.hex)
-        if style.color_palette.support_3.hex:
-            color_palette.append(style.color_palette.support_3.hex)
-        
-        if color_palette:
-            # Describe the color scheme in a natural way
-            if len(color_palette) >= 2:
-                prompt_parts.append(f"Color scheme: dominant colors {color_palette[0]} and {color_palette[1]}")
-                if len(color_palette) > 2:
-                    other_colors = ', '.join(color_palette[2:])
-                    prompt_parts.append(f"with accent colors {other_colors}")
-            else:
-                prompt_parts.append(f"Dominant color: {color_palette[0]}")
-        
-        # Add background color if specified
-        if style.color_palette.background.hex:
-            prompt_parts.append(f"Background tone: {style.color_palette.background.hex}")
-        
-        # Add environment/setting details
+        # === SECTION 5: COMPOSITION & ENVIRONMENT ===
+        # Setting and environment
         if style.environment:
-            prompt_parts.append(f"Setting: {', '.join(style.environment)}")
+            prompt_parts.append(f"Environment: {', '.join(style.environment)}")
         
+        # Props and objects
         if style.props:
-            prompt_parts.append(f"Props/elements: {', '.join(style.props)}")
+            prompt_parts.append(f"Include elements: {', '.join(style.props)}")
+        
+        # === SECTION 6: PEOPLE REPRESENTATION ===
+        if style.occupation:
+            prompt_parts.append(f"Featuring: {', '.join(style.occupation)}")
         
         if style.people_ethnicity:
             prompt_parts.append(f"People: {style.people_ethnicity}")
         
-        if style.occupation:
-            prompt_parts.append(f"Featuring: {', '.join(style.occupation)}")
-        
-        # Combine into a cohesive prompt
+        # === SECTION 7: QUALITY & CONSISTENCY ===
+        # Combine all parts into a cohesive prompt
         full_prompt = ". ".join(prompt_parts)
         
-        # Add instruction for style consistency (visual only)
-        full_prompt += ". Maintain consistent visual style, color harmony, and aesthetic throughout the image."
+        # Add final instructions for quality and consistency
+        full_prompt += (
+            ". High quality, professional composition. "
+            "Ensure all elements use the specified color palette consistently. "
+            "Maintain visual harmony and cohesive aesthetic throughout."
+        )
+        
+        logger.debug(f"Generated prompt template breakdown:")
+        logger.debug(f"  User content: {user_prompt}")
+        logger.debug(f"  Visual style: {visual_traits if brand.brand_personality else 'none'}")
+        logger.debug(f"  Color palette: {color_instruction}")
         
         return full_prompt
+    
+    def _personality_to_visual(self, personality_traits: list) -> list:
+        """
+        Convert brand personality traits to visual/aesthetic descriptors.
+        
+        Maps abstract brand personalities to concrete visual styles:
+        - "professional" → "clean, polished, organized"
+        - "innovative" → "cutting-edge, modern, forward-thinking"
+        
+        This ensures the image reflects the brand's character visually.
+        """
+        visual_traits = []
+        
+        # Mapping of personality traits to visual descriptors
+        trait_map = {
+            'professional': 'clean, polished, and well-organized',
+            'modern': 'contemporary, sleek, and minimalist',
+            'innovative': 'cutting-edge, creative, and forward-thinking',
+            'friendly': 'warm, approachable, and inviting',
+            'luxurious': 'elegant, premium, and sophisticated',
+            'premium': 'high-end, refined, and exclusive',
+            'playful': 'vibrant, energetic, and fun',
+            'fun': 'lively, colorful, and dynamic',
+            'trustworthy': 'solid, dependable, and stable',
+            'reliable': 'consistent, professional, and steady',
+            'creative': 'artistic, imaginative, and expressive',
+            'bold': 'striking, confident, and impactful',
+            'elegant': 'refined, graceful, and tasteful',
+            'minimalist': 'simple, clean, and uncluttered',
+            'traditional': 'classic, timeless, and established',
+            'edgy': 'bold, unconventional, and distinctive',
+            'corporate': 'professional, structured, and formal',
+            'casual': 'relaxed, informal, and comfortable',
+            'tech': 'digital, modern, and innovative',
+            'eco': 'natural, sustainable, and organic',
+            'youthful': 'fresh, energetic, and contemporary',
+            'mature': 'sophisticated, established, and refined'
+        }
+        
+        for trait in personality_traits:
+            trait_lower = trait.lower().strip()
+            
+            # Try exact match first
+            if trait_lower in trait_map:
+                visual_traits.append(trait_map[trait_lower])
+            else:
+                # Try partial matches
+                for key, value in trait_map.items():
+                    if key in trait_lower:
+                        visual_traits.append(value)
+                        break
+                else:
+                    # Use the trait as-is if no mapping found
+                    visual_traits.append(trait_lower)
+        
+        return visual_traits
+    
+    def _build_color_instruction(self, color_palette: Any) -> str:
+        """
+        Build detailed color instructions from the brand's color palette.
+        
+        Creates natural language instructions like:
+        "Use a color palette dominated by #0070F3 (primary) and #000000 (secondary),
+         with #FFFFFF as accent, on a #FAFAFA background"
+        
+        This is the KEY element that makes generated images match the brand.
+        """
+        colors = []
+        
+        # Primary color (most important)
+        if hasattr(color_palette, 'primary') and color_palette.primary.hex:
+            colors.append(f"{color_palette.primary.hex} as the dominant primary color")
+        
+        # Secondary color
+        if hasattr(color_palette, 'secondary') and color_palette.secondary.hex:
+            colors.append(f"{color_palette.secondary.hex} as the secondary color")
+        
+        # Support/accent colors
+        accent_colors = []
+        for attr in ['support_1', 'support_2', 'support_3']:
+            if hasattr(color_palette, attr):
+                color_obj = getattr(color_palette, attr)
+                if color_obj.hex:
+                    accent_colors.append(color_obj.hex)
+        
+        if accent_colors:
+            colors.append(f"{', '.join(accent_colors)} as accent colors")
+        
+        # Positive/highlight color
+        if hasattr(color_palette, 'positive') and color_palette.positive.hex:
+            colors.append(f"{color_palette.positive.hex} for highlights")
+        
+        # Background color
+        background = ""
+        if hasattr(color_palette, 'background') and color_palette.background.hex:
+            background = f" on a {color_palette.background.hex} background"
+        
+        if colors:
+            return f"Color palette: use {', '.join(colors)}{background}"
+        
+        return ""
     
     def _save_image(self, image_bytes: bytes, mime_type: str) -> Path:
         """Save image bytes to local file."""
