@@ -60,8 +60,6 @@ class BrandExtractionAgent:
                         temperature=0.7,
                         api_key=api_key
                     )
-                    # Test the connection
-                    llm.invoke([HumanMessage(content="test")])
                     print("✓ OpenAI LLM (gpt-4o-mini) initialized successfully")
                     return llm
                 except Exception as e:
@@ -81,8 +79,6 @@ class BrandExtractionAgent:
                         temperature=0.7,
                         google_api_key=api_key
                     )
-                    # Test the connection
-                    llm.invoke([HumanMessage(content="test")])
                     print("✓ Google Gemini LLM initialized successfully")
                     return llm
                 except Exception as e:
@@ -95,8 +91,6 @@ class BrandExtractionAgent:
                     model="llama3.2",  # or "mistral", "llama2", etc.
                     temperature=0.7
                 )
-                # Test the connection
-                llm.invoke([HumanMessage(content="test")])
                 print("✓ Ollama LLM (local) initialized successfully")
                 return llm
             except Exception as e:
@@ -109,6 +103,35 @@ class BrandExtractionAgent:
         print("    - Set OPENAI_API_KEY for OpenAI")
         print("    - Set GEMINI_API_KEY for Google Gemini (free tier)")
         print("    - Install Ollama for local LLM: https://ollama.ai/")
+        return None
+    
+    def _initialize_llm_with_skip(self, skip_llm=None):
+        """Initialize LLM skipping the one that failed."""
+        # Try Google Gemini if OpenAI failed
+        if skip_llm and OPENAI_AVAILABLE and isinstance(skip_llm, ChatOpenAI):
+            if GOOGLE_AVAILABLE:
+                api_key = os.getenv('GEMINI_API_KEY', '') or os.getenv('GOOGLE_API_KEY', '')
+                if api_key:
+                    try:
+                        llm = ChatGoogleGenerativeAI(
+                            model="gemini-pro",
+                            temperature=0.7,
+                            google_api_key=api_key
+                        )
+                        print("✓ Switched to Google Gemini LLM")
+                        return llm
+                    except:
+                        pass
+        
+        # Try Ollama as last resort
+        if OLLAMA_AVAILABLE:
+            try:
+                llm = ChatOllama(model="llama3.2", temperature=0.7)
+                print("✓ Switched to Ollama LLM (local)")
+                return llm
+            except:
+                pass
+        
         return None
     
     def extract(self, url: str) -> BrandIdentity:
