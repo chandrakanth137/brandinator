@@ -16,6 +16,7 @@ except ImportError:
     genai = None
 
 from backend.app.models import BrandIdentity
+from backend.app.logger import logger
 
 
 class ImageGenerator:
