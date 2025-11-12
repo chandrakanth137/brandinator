@@ -14,7 +14,8 @@ A full-stack Python application that extracts brand identity from websites and g
 - **Backend**: FastAPI
 - **Frontend**: Streamlit
 - **Agent Framework**: LangChain
-- **Web Scraping**: BeautifulSoup
+- **Web Scraping**: Playwright (with BeautifulSoup fallback)
+- **Search**: Playwright-based Google Search (no API key needed)
 - **Image Processing**: Pillow, ColorThief
 - **Package Manager**: uv
 
@@ -61,7 +62,13 @@ brandinator/
    uv sync
    ```
 
-3. **Set up environment variables**:
+3. **Install Playwright browsers** (required for web scraping and Google search):
+
+   ```bash
+   uv run playwright install chromium
+   ```
+
+4. **Set up environment variables**:
 
    ```bash
    cp .env.example .env
@@ -71,8 +78,13 @@ brandinator/
    Required API keys (optional for basic functionality):
 
    - `OPENAI_API_KEY`: For LangChain agent (optional, has fallback)
-   - `GOOGLE_API_KEY`: For Google Search and image generation (optional)
-   - `GOOGLE_SEARCH_ENGINE_ID`: For Google Custom Search (optional)
+   - `GOOGLE_API_KEY`: For image generation only (optional, mocked if not available)
+
+   **Install Playwright browsers** (required for web scraping and Google search):
+
+   ```bash
+   uv run playwright install chromium
+   ```
 
 ## Running Locally
 
@@ -81,16 +93,19 @@ brandinator/
 In one terminal, you can use any of these methods:
 
 **Option 1: Using the run script**
+
 ```bash
 ./run_backend.sh
 ```
 
 **Option 2: Using uv run**
+
 ```bash
 uv run backend/app/main.py
 ```
 
 **Option 3: Using uvicorn directly**
+
 ```bash
 uv run uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
 ```
@@ -102,11 +117,13 @@ The API will be available at `http://localhost:8000`
 In another terminal:
 
 **Option 1: Using the run script**
+
 ```bash
 ./run_frontend.sh
 ```
 
 **Option 2: Using streamlit directly**
+
 ```bash
 streamlit run frontend/app.py
 ```
