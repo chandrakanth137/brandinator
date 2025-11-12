@@ -106,7 +106,7 @@ with col1:
                     response = requests.post(
                         f"{BACKEND_URL}/extract",
                         json={"url": url_input},
-                        timeout=60
+                        timeout=120  # Increased timeout for LLM processing
                     )
                     response.raise_for_status()
                     data = response.json()
