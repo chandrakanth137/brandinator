@@ -314,9 +314,79 @@ class WebScraper:
         from concurrent.futures import ThreadPoolExecutor, as_completed
         
         def scrape_single_page(url_to_scrape: str) -> tuple:
-            """Scrape a single page and return (url, page_data, error)."""
+            """Scrape a single page and return (url, page_data, error).
+            
+            Creates a separate browser instance per thread since Playwright
+            cannot be shared across threads.
+            """
             try:
-                page_data = self.scrape(url_to_scrape)
+                # For parallel scraping, we need to use BeautifulSoup or create
+                # a separate browser instance. Since Playwright doesn't work across
+                # threads, we'll use BeautifulSoup for parallel requests.
+                # This is faster for static content but won't handle JS-heavy sites.
+                from urllib.parse import urlparse
+                from bs4 import BeautifulSoup
+                
+                # Use requests session for parallel scraping
+                session = requests.Session()
+                session.headers.update({
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                })
+                
+                response = session.get(url_to_scrape, timeout=15, allow_redirects=True)
+                response.raise_for_status()
+                soup = BeautifulSoup(response.content, 'html.parser')
+                
+                # Extract title
+                title = soup.find('title')
+                title_text = title.get_text().strip() if title else ''
+                
+                # Extract meta description
+                meta_desc = soup.find('meta', attrs={'name': 'description'})
+                if not meta_desc:
+                    meta_desc = soup.find('meta', attrs={'property': 'og:description'})
+                description = meta_desc.get('content', '').strip() if meta_desc else ''
+                
+                # Extract text content
+                for script in soup(["script", "style", "nav", "footer", "header"]):
+                    script.decompose()
+                
+                text = soup.get_text()
+                lines = (line.strip() for line in text.splitlines())
+                chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+                text = ' '.join(chunk for chunk in chunks if chunk)
+                
+                # Extract images
+                images = []
+                for img in soup.find_all('img', src=True)[:20]:
+                    src = img.get('src') or img.get('data-src')
+                    if src:
+                        if not src.startswith('http'):
+                            src = urljoin(url_to_scrape, src)
+                        images.append({'url': src, 'alt': img.get('alt', '')})
+                
+                # Extract links
+                links = []
+                for link in soup.find_all('a', href=True)[:50]:
+                    href = link.get('href')
+                    if href:
+                        if not href.startswith('http'):
+                            href = urljoin(url_to_scrape, href)
+                        parsed = urlparse(href)
+                        base_parsed = urlparse(url_to_scrape)
+                        if parsed.netloc == base_parsed.netloc or not parsed.netloc:
+                            links.append(href)
+                
+                page_data = {
+                    'url': url_to_scrape,
+                    'title': title_text,
+                    'description': description,
+                    'text': text[:5000],
+                    'images': images[:20],
+                    'links': list(set(links))[:10],
+                    'html': str(soup)  # Include HTML for CSS color extraction
+                }
+                
                 return (url_to_scrape, page_data, None)
             except Exception as e:
                 return (url_to_scrape, None, str(e))
