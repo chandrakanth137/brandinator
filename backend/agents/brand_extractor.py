@@ -259,6 +259,7 @@ class BrandExtractionAgent:
             aggregated_data=aggregated_data,
             search_results=search_results,
             colors=colors,
+            fonts_info=fonts_info,
             style_analysis=style_analysis
         )
         
@@ -295,6 +296,7 @@ class BrandExtractionAgent:
         aggregated_data: Dict[str, Any],
         search_results: List[Dict[str, str]],
         colors: List[Dict[str, str]],
+        fonts_info: Dict[str, Any],
         style_analysis: Dict[str, Any]
     ) -> BrandIdentity:
         """Generate comprehensive Brand Identity JSON using LLM reasoning from multiple pages."""
