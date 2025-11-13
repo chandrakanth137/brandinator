@@ -23,28 +23,23 @@ class ImageGenerator:
     """Generate on-brand images using Gemini 2.5 Flash image generation."""
     
     def __init__(self):
-        # Use Gemini API key (simpler than Vertex AI)
         api_key = os.getenv('GEMINI_IMAGE_API_KEY', '') or os.getenv('GEMINI_API_KEY', '') or os.getenv('GOOGLE_API_KEY', '')
         
-        # Create downloads directory
         self.downloads_dir = Path("generated_images")
         self.downloads_dir.mkdir(exist_ok=True)
         logger.info(f"Images will be saved to: {self.downloads_dir.absolute()}")
         
-        # Initialize prompt crafting agent
         self.prompt_crafter = PromptCraftingAgent()
         logger.info("✓ Prompt Crafting Agent initialized")
         
         if api_key and genai:
             try:
-                # Configure Gemini API
                 genai.configure(api_key=api_key)
                 
-                # Initialize Gemini 2.5 Flash model with image generation capability
                 self.model = genai.GenerativeModel(
                     model_name='gemini-2.5-flash-image',
                     generation_config={
-                        'response_modalities': ['IMAGE']  # Only generate images
+                        'response_modalities': ['IMAGE']
                     }
                 )
                 
@@ -73,8 +68,6 @@ class ImageGenerator:
         user_prompt: str
     ) -> str:
         """Generate an image based on brand identity and user prompt."""
-        
-        # Use the prompt crafting agent to intelligently craft the prompt
         logger.info("Crafting image generation prompt with Prompt Crafting Agent...")
         style_prompt = self.prompt_crafter.craft_prompt(brand_identity, user_prompt)
         

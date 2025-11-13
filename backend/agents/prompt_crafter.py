@@ -1,31 +1,18 @@
 """Image Prompt Crafting Agent - Intelligently combines brand identity with user prompts."""
 import json
 import os
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from langchain_core.messages import HumanMessage
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
-# Try to import various LLM providers
-try:
-    from langchain_openai import ChatOpenAI
-    OPENAI_AVAILABLE = True
-except ImportError:
-    OPENAI_AVAILABLE = False
-
 try:
     from langchain_google_genai import ChatGoogleGenerativeAI
     GOOGLE_AVAILABLE = True
 except ImportError:
     GOOGLE_AVAILABLE = False
-
-try:
-    from langchain_ollama import ChatOllama
-    OLLAMA_AVAILABLE = True
-except ImportError:
-    OLLAMA_AVAILABLE = False
 
 from backend.app.models import BrandIdentity
 from backend.app.logger import logger
@@ -71,31 +58,10 @@ class PromptCraftingAgent:
     """Agent that intelligently crafts image generation prompts by combining brand identity with user requests."""
     
     def __init__(self):
-        """Initialize the prompt crafting agent with LLM support."""
         self.llm = self._initialize_llm()
     
     def _initialize_llm(self):
-        """Initialize LLM with fallback to multiple providers."""
-        # Try OpenAI first
-        if OPENAI_AVAILABLE:
-            api_key = os.getenv('OPENAI_API_KEY', '')
-            if api_key:
-                try:
-                    llm = ChatOpenAI(
-                        model="gpt-4o-mini",
-                        temperature=0.8,  # Slightly higher for creative prompt crafting
-                        api_key=api_key
-                    )
-                    logger.info("✓ Prompt Crafting Agent: OpenAI LLM (gpt-4o-mini) initialized")
-                    return llm
-                except Exception as e:
-                    error_msg = str(e)
-                    if "quota" in error_msg.lower() or "429" in error_msg:
-                        logger.warning("⚠ OpenAI quota exceeded, trying alternative providers...")
-                    else:
-                        logger.warning(f"⚠ OpenAI LLM failed: {e}, trying alternatives...")
-        
-        # Try Google Gemini
+        """Initialize LLM with Google Gemini."""
         if GOOGLE_AVAILABLE:
             api_key = os.getenv('GEMINI_ANALYSIS_API_KEY', '') or os.getenv('GEMINI_API_KEY', '') or os.getenv('GOOGLE_API_KEY', '')
             if api_key:
@@ -110,19 +76,6 @@ class PromptCraftingAgent:
                 except Exception as e:
                     logger.warning(f"⚠ Google Gemini LLM failed: {e}")
         
-        # Try Ollama (local)
-        if OLLAMA_AVAILABLE:
-            try:
-                llm = ChatOllama(
-                    model="llama3.2",
-                    temperature=0.8
-                )
-                logger.info("✓ Prompt Crafting Agent: Ollama LLM (local) initialized")
-                return llm
-            except Exception as e:
-                logger.warning(f"⚠ Ollama LLM not available: {e}")
-        
-        # No LLM available
         logger.warning("⚠ Prompt Crafting Agent: No LLM available - will use rule-based prompt crafting")
         return None
     
@@ -183,10 +136,8 @@ class PromptCraftingAgent:
     
     def _brand_identity_to_dict(self, brand_identity: BrandIdentity) -> Dict[str, Any]:
         """Convert BrandIdentity Pydantic model to dictionary for JSON serialization."""
-        # Convert to dict, handling None values
         brand_dict = brand_identity.model_dump(mode='json', exclude_none=False)
         
-        # Clean up None values for better LLM understanding
         def clean_dict(d):
             if isinstance(d, dict):
                 return {k: clean_dict(v) for k, v in d.items() if v is not None and v != "" and v != []}
@@ -199,18 +150,14 @@ class PromptCraftingAgent:
     
     def _clean_prompt(self, prompt: str) -> str:
         """Clean up the LLM-generated prompt (remove markdown, extra formatting)."""
-        # Remove markdown code blocks if present
         if prompt.startswith("```"):
             lines = prompt.split("\n")
-            # Remove first line (``` or ```text)
             if lines[0].startswith("```"):
                 lines = lines[1:]
-            # Remove last line if it's ```
             if lines and lines[-1].strip() == "```":
                 lines = lines[:-1]
             prompt = "\n".join(lines)
         
-        # Remove leading/trailing quotes if present
         prompt = prompt.strip()
         if prompt.startswith('"') and prompt.endswith('"'):
             prompt = prompt[1:-1]
@@ -224,39 +171,30 @@ class PromptCraftingAgent:
         brand_identity: BrandIdentity,
         user_prompt: str
     ) -> str:
-        """
-        Fallback rule-based prompt crafting when LLM is not available.
-        This is a simpler version that still incorporates brand elements.
-        """
+        """Fallback rule-based prompt crafting when LLM is not available."""
         brand_core = brand_identity.brand_core
         visual = brand_identity.visual_identity
         image_guidelines = brand_identity.image_generation_guidelines
         voice = brand_identity.brand_voice
         
-        # Extract key elements
         personality_traits = ", ".join(brand_core.brand_personality.traits) if brand_core.brand_personality and brand_core.brand_personality.traits else "professional"
         aesthetic = visual.design_style.overall_aesthetic or "modern"
         
-        # Colors
         color_palette = visual.color_palette
         primary_color = color_palette.primary.hex if (color_palette.primary and color_palette.primary.hex) else ""
         secondary_color = color_palette.secondary.hex if (color_palette.secondary and color_palette.secondary.hex) else ""
         neutrals = [n.hex for n in color_palette.neutrals if n and n.hex] if color_palette.neutrals else []
         
-        # Imagery style
         imagery = visual.imagery_style
         lighting = imagery.lighting or "natural"
         composition = imagery.composition or "balanced"
         color_treatment = imagery.color_treatment or "vibrant"
         
-        # Build prompt
         prompt_parts = [f"Create a professional image: {user_prompt}"]
         
-        # Add aesthetic
         if aesthetic:
             prompt_parts.append(f"Style: {aesthetic}")
         
-        # Add colors if available
         if primary_color:
             color_desc = f"Use {primary_color} as the primary color"
             if secondary_color:
@@ -265,14 +203,11 @@ class PromptCraftingAgent:
                 color_desc += f", and {', '.join(neutrals[:2])} as neutral tones"
             prompt_parts.append(color_desc)
         
-        # Add visual style
         prompt_parts.append(f"{lighting} lighting, {composition} composition, {color_treatment} color treatment")
         
-        # Add personality
         if personality_traits:
             prompt_parts.append(f"Evoke a {personality_traits.lower()} feeling")
         
-        # Add quality requirements
         prompt_parts.append("High quality, professional, clean composition. DO NOT include any text, logos, or brand names.")
         
         return ". ".join(prompt_parts)

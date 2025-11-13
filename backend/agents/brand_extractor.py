@@ -1,31 +1,18 @@
 """Brand Extraction Agent using LangChain."""
 import json
 import os
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from langchain_core.messages import HumanMessage
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
-# Try to import various LLM providers
-try:
-    from langchain_openai import ChatOpenAI
-    OPENAI_AVAILABLE = True
-except ImportError:
-    OPENAI_AVAILABLE = False
-
 try:
     from langchain_google_genai import ChatGoogleGenerativeAI
     GOOGLE_AVAILABLE = True
 except ImportError:
     GOOGLE_AVAILABLE = False
-
-try:
-    from langchain_ollama import ChatOllama
-    OLLAMA_AVAILABLE = True
-except ImportError:
-    OLLAMA_AVAILABLE = False
 
 from backend.agents.tools import (
     WebScraper,
@@ -35,10 +22,8 @@ from backend.agents.tools import (
     VisionStyleAnalyzer
 )
 from backend.app.models import (
-    BrandIdentity, BrandCore, BrandPersonality, TargetAudience, PrimaryDemographics,
-    VisualIdentity, DesignStyle, ColorPalette, ColorInfo, Typography, ImageryStyle, GraphicElements,
-    BrandVoice, ImageGenerationGuidelines, PeopleRepresentation, Environment, PropsAndObjects,
-    MoodAndEmotion, TechnicalSpecs, ContentThemes, SourcePage
+    BrandIdentity, BrandPersonality, VisualIdentity, DesignStyle, 
+    ColorPalette, ColorInfo, ImageGenerationGuidelines, TechnicalSpecs, SourcePage
 )
 
 
@@ -52,37 +37,13 @@ class BrandExtractionAgent:
         self.typography_extractor = TypographyExtractor()
         self.vision_analyzer = VisionStyleAnalyzer()
         
-        # Initialize LLM with multiple provider support and fallbacks
         self.llm = self._initialize_llm()
     
     def _initialize_llm(self):
-        """Initialize LLM with fallback to multiple providers."""
-        # Try OpenAI first
-        if OPENAI_AVAILABLE:
-            api_key = os.getenv('OPENAI_API_KEY', '')
-            if api_key:
-                try:
-                    llm = ChatOpenAI(
-                        model="gpt-4o-mini",  # Use cheaper model, fallback to gpt-4o if needed
-                        temperature=0.7,
-                        api_key=api_key
-                    )
-                    print("✓ OpenAI LLM (gpt-4o-mini) initialized successfully")
-                    return llm
-                except Exception as e:
-                    error_msg = str(e)
-                    if "quota" in error_msg.lower() or "429" in error_msg:
-                        print("⚠ OpenAI quota exceeded, trying alternative providers...")
-                    else:
-                        print(f"⚠ OpenAI LLM failed: {e}, trying alternatives...")
-        
-        # Try Google Gemini (free tier available)
+        """Initialize LLM with Google Gemini."""
         if GOOGLE_AVAILABLE:
             api_key = os.getenv('GEMINI_ANALYSIS_API_KEY', '') or os.getenv('GEMINI_API_KEY', '') or os.getenv('GOOGLE_API_KEY', '')
             if api_key:
-                # Try different model name formats
-                model_names = [ "gemini-2.5-flash"]
-                
                 try:
                     llm = ChatGoogleGenerativeAI(
                         model="gemini-2.5-flash",
@@ -94,54 +55,25 @@ class BrandExtractionAgent:
                 except Exception as e:
                     print(f"⚠ Google Gemini LLM failed: {e}")
         
-        # Try Ollama (local, free, no API key needed)
-        if OLLAMA_AVAILABLE:
-            try:
-                llm = ChatOllama(
-                    model="llama3.2",  # or "mistral", "llama2", etc.
-                    temperature=0.7
-                )
-                print("✓ Ollama LLM (local) initialized successfully")
-                return llm
-            except Exception as e:
-                print(f"⚠ Ollama LLM not available: {e}")
-                print("  Install Ollama: https://ollama.ai/")
-        
-        # No LLM available
         print("⚠ No LLM available - using enhanced rule-based extraction")
-        print("  Options:")
-        print("    - Set OPENAI_API_KEY for OpenAI")
-        print("    - Set GEMINI_ANALYSIS_API_KEY for Google Gemini (free tier)")
-        print("    - Install Ollama for local LLM: https://ollama.ai/")
+        print("  Set GEMINI_ANALYSIS_API_KEY for Google Gemini")
         return None
     
     def _initialize_llm_with_skip(self, skip_llm=None):
         """Initialize LLM skipping the one that failed."""
-        # Try Google Gemini if OpenAI failed
-        if skip_llm and OPENAI_AVAILABLE and isinstance(skip_llm, ChatOpenAI):
-            if GOOGLE_AVAILABLE:
-                api_key = os.getenv('GEMINI_ANALYSIS_API_KEY', '') or os.getenv('GEMINI_API_KEY', '') or os.getenv('GOOGLE_API_KEY', '')
-                if api_key:
-                    try:
-                        llm = ChatGoogleGenerativeAI(
-                            model="gemini-2.5-flash",
-                            temperature=0.7,
-                            google_api_key=api_key
-                        )
-                        print("✓ Switched to Google Gemini LLM (gemini-2.5-flash)")
-                        return llm
-                    except Exception as e:
-                        print(f"⚠ Google Gemini LLM fallback failed: {e}")
-        
-        # Try Ollama as last resort
-        if OLLAMA_AVAILABLE:
-            try:
-                llm = ChatOllama(model="llama3.2", temperature=0.7)
-                print("✓ Switched to Ollama LLM (local)")
-                return llm
-            except:
-                pass
-        
+        if GOOGLE_AVAILABLE:
+            api_key = os.getenv('GEMINI_ANALYSIS_API_KEY', '') or os.getenv('GEMINI_API_KEY', '') or os.getenv('GOOGLE_API_KEY', '')
+            if api_key:
+                try:
+                    llm = ChatGoogleGenerativeAI(
+                        model="gemini-2.5-flash",
+                        temperature=0.7,
+                        google_api_key=api_key
+                    )
+                    print("✓ Switched to Google Gemini LLM (gemini-2.5-flash)")
+                    return llm
+                except Exception as e:
+                    print(f"⚠ Google Gemini LLM fallback failed: {e}")
         return None
     
     def extract(self, url: str) -> BrandIdentity:

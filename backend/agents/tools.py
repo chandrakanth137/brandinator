@@ -1556,7 +1556,6 @@ class VisionStyleAnalyzer:
             'color_scheme': 'vibrant'
         }
         
-        # Could integrate with OpenAI Vision API or similar here
         # For now, return placeholder analysis
         
         return style_analysis
