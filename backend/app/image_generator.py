@@ -75,8 +75,11 @@ class ImageGenerator:
         if self.enabled:
             try:
                 logger.info(f"Generating image with Gemini 2.5 Flash...")
-                logger.info(f"Prompt: {style_prompt[:200]}...")
-                logger.debug(f"Full prompt: {style_prompt}")
+                logger.info("=" * 60)
+                logger.info("IMAGE GENERATION PROMPT:")
+                logger.info("=" * 60)
+                logger.info(style_prompt)
+                logger.info("=" * 60)
                 
                 # Generate image using Gemini
                 response = self.model.generate_content(style_prompt)
