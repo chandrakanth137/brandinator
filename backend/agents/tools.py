@@ -594,7 +594,7 @@ class ColorPaletteExtractor:
     """Extract color palette from images and website CSS."""
     
     def extract_from_css(self, html_content: str, soup: BeautifulSoup = None) -> List[Dict[str, str]]:
-        """Extract colors from CSS styles in the HTML."""
+        """Extract colors from CSS styles in the HTML with focus on BRAND colors."""
         colors = []
         # Improved regex patterns for color extraction
         hex_pattern = re.compile(r'#([0-9a-fA-F]{3,6})\b')
@@ -603,7 +603,43 @@ class ColorPaletteExtractor:
         if soup is None:
             soup = BeautifulSoup(html_content, 'html.parser')
         
-        # Extract from inline styles
+        print("  🎨 Color extraction starting...")
+        
+        # PRIORITY 1: Extract from BRAND-IDENTIFYING ELEMENTS (buttons, CTAs, headers, logos)
+        # These are most likely to contain primary brand colors
+        brand_elements = soup.select('button, a[class*="btn"], [class*="button"], [class*="cta"], nav, header, [class*="logo"], h1, h2, [class*="primary"], [class*="brand"]')
+        print(f"  Found {len(brand_elements)} brand-identifying elements")
+        
+        for element in brand_elements[:50]:  # Check first 50 brand elements
+            # Inline styles
+            if element.get('style'):
+                style = element.get('style', '')
+                
+                # Extract hex colors
+                for match in hex_pattern.finditer(style):
+                    hex_val = match.group(1)
+                    hex_color = f"#{hex_val}"
+                    if len(hex_val) == 3:
+                        hex_color = f"#{hex_val[0]}{hex_val[0]}{hex_val[1]}{hex_val[1]}{hex_val[2]}{hex_val[2]}"
+                    colors.append({
+                        'name': self._hex_to_name(hex_color),
+                        'hex': hex_color.upper(),
+                        'source': 'brand_element',
+                        'priority': 1  # High priority
+                    })
+                
+                # Extract RGB colors
+                for match in rgb_pattern.finditer(style):
+                    r, g, b = int(match.group(1)), int(match.group(2)), int(match.group(3))
+                    hex_color = f"#{r:02x}{g:02x}{b:02x}".upper()
+                    colors.append({
+                        'name': self._hex_to_name(hex_color),
+                        'hex': hex_color,
+                        'source': 'brand_element',
+                        'priority': 1
+                    })
+        
+        # PRIORITY 2: Extract from ALL style attributes (inline styles)
         for element in soup.find_all(style=True):
             style = element.get('style', '')
             
@@ -611,29 +647,69 @@ class ColorPaletteExtractor:
             for match in hex_pattern.finditer(style):
                 hex_val = match.group(1)
                 hex_color = f"#{hex_val}"
-                if len(hex_val) == 3:  # Convert #RGB to #RRGGBB
+                if len(hex_val) == 3:
                     hex_color = f"#{hex_val[0]}{hex_val[0]}{hex_val[1]}{hex_val[1]}{hex_val[2]}{hex_val[2]}"
                 colors.append({
                     'name': self._hex_to_name(hex_color),
-                    'hex': hex_color,
-                    'source': 'css_inline'
+                    'hex': hex_color.upper(),
+                    'source': 'css_inline',
+                    'priority': 2
                 })
             
             # Extract RGB colors
             for match in rgb_pattern.finditer(style):
                 r, g, b = int(match.group(1)), int(match.group(2)), int(match.group(3))
-                hex_color = f"#{r:02x}{g:02x}{b:02x}"
+                hex_color = f"#{r:02x}{g:02x}{b:02x}".upper()
                 colors.append({
                     'name': self._hex_to_name(hex_color),
                     'hex': hex_color,
-                    'source': 'css_inline'
+                    'source': 'css_inline',
+                    'priority': 2
                 })
         
-        # Extract from style tags
+        # PRIORITY 3: Extract from style tags (CSS rules)
         for style_tag in soup.find_all('style'):
             style_content = style_tag.string or ''
             
-            # Extract hex colors
+            # Look for important CSS selectors that indicate brand colors
+            brand_css_patterns = [
+                r':root\s*{([^}]+)}',  # CSS variables
+                r'\.primary[^{]*{([^}]+)}',
+                r'\.brand[^{]*{([^}]+)}',
+                r'\.btn[^{]*{([^}]+)}',
+                r'button[^{]*{([^}]+)}',
+            ]
+            
+            for pattern in brand_css_patterns:
+                matches = re.finditer(pattern, style_content, re.IGNORECASE)
+                for match in matches:
+                    css_block = match.group(1) if match.lastindex >= 1 else match.group(0)
+                    
+                    # Extract hex colors from this CSS block
+                    for hex_match in hex_pattern.finditer(css_block):
+                        hex_val = hex_match.group(1)
+                        hex_color = f"#{hex_val}"
+                        if len(hex_val) == 3:
+                            hex_color = f"#{hex_val[0]}{hex_val[0]}{hex_val[1]}{hex_val[1]}{hex_val[2]}{hex_val[2]}"
+                        colors.append({
+                            'name': self._hex_to_name(hex_color),
+                            'hex': hex_color.upper(),
+                            'source': 'brand_css',
+                            'priority': 1
+                        })
+                    
+                    # Extract RGB colors
+                    for rgb_match in rgb_pattern.finditer(css_block):
+                        r, g, b = int(rgb_match.group(1)), int(rgb_match.group(2)), int(rgb_match.group(3))
+                        hex_color = f"#{r:02x}{g:02x}{b:02x}".upper()
+                        colors.append({
+                            'name': self._hex_to_name(hex_color),
+                            'hex': hex_color,
+                            'source': 'brand_css',
+                            'priority': 1
+                        })
+            
+            # Extract ALL colors from style tags
             for match in hex_pattern.finditer(style_content):
                 hex_val = match.group(1)
                 hex_color = f"#{hex_val}"
@@ -641,18 +717,20 @@ class ColorPaletteExtractor:
                     hex_color = f"#{hex_val[0]}{hex_val[0]}{hex_val[1]}{hex_val[1]}{hex_val[2]}{hex_val[2]}"
                 colors.append({
                     'name': self._hex_to_name(hex_color),
-                    'hex': hex_color,
-                    'source': 'css_style_tag'
+                    'hex': hex_color.upper(),
+                    'source': 'css_style_tag',
+                    'priority': 3
                 })
             
             # Extract RGB colors
             for match in rgb_pattern.finditer(style_content):
                 r, g, b = int(match.group(1)), int(match.group(2)), int(match.group(3))
-                hex_color = f"#{r:02x}{g:02x}{b:02x}"
+                hex_color = f"#{r:02x}{g:02x}{b:02x}".upper()
                 colors.append({
                     'name': self._hex_to_name(hex_color),
                     'hex': hex_color,
-                    'source': 'css_style_tag'
+                    'source': 'css_style_tag',
+                    'priority': 3
                 })
         
         # Extract background and text colors from body/main elements
@@ -668,21 +746,42 @@ class ColorPaletteExtractor:
                         if hex_color:
                             colors.append({
                                 'name': 'background',
-                                'hex': hex_color,
-                                'source': 'body_background'
+                                'hex': hex_color.upper(),
+                                'source': 'body_background',
+                                'priority': 2
                             })
         except:
             pass
         
-        # Deduplicate by hex
+        # Deduplicate by hex and sort by priority
         seen = set()
         unique_colors = []
-        for color in colors:
-            if color['hex'].upper() not in seen:
-                seen.add(color['hex'].upper())
+        
+        # Filter out common non-brand colors (pure white, pure black, very light grays)
+        def is_likely_brand_color(hex_color):
+            hex_clean = hex_color.lstrip('#').upper()
+            # Keep black/white if they're from brand elements
+            if hex_clean in ['FFFFFF', '000000', 'FFF', '000']:
+                return any(c['hex'].upper() == hex_color.upper() and c.get('priority', 3) <= 2 for c in colors)
+            # Skip very light grays (unless from brand elements)
+            if hex_clean.startswith('F') and len(set(hex_clean)) <= 2:
+                return any(c['hex'].upper() == hex_color.upper() and c.get('priority', 3) == 1 for c in colors)
+            return True
+        
+        # Sort by priority (lower = more important)
+        colors_sorted = sorted(colors, key=lambda x: x.get('priority', 999))
+        
+        for color in colors_sorted:
+            hex_upper = color['hex'].upper()
+            if hex_upper not in seen and is_likely_brand_color(color['hex']):
+                seen.add(hex_upper)
                 unique_colors.append(color)
         
-        return unique_colors[:10]  # Return top 10 unique colors
+        print(f"  ✓ Extracted {len(unique_colors)} unique colors:")
+        for i, c in enumerate(unique_colors[:15]):
+            print(f"    {i+1}. {c['hex']} ({c['name']}) from {c['source']}")
+        
+        return unique_colors[:15]  # Return top 15 unique colors
     
     def _parse_color_value(self, color_val: str) -> Optional[str]:
         """Parse various color formats to hex."""

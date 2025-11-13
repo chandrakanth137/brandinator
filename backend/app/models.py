@@ -10,14 +10,14 @@ class ColorInfo(BaseModel):
 
 
 class ColorPalette(BaseModel):
-    """Brand color palette."""
-    primary: ColorInfo = Field(default_factory=lambda: ColorInfo())
-    secondary: ColorInfo = Field(default_factory=lambda: ColorInfo())
-    support_1: ColorInfo = Field(default_factory=lambda: ColorInfo())
-    support_2: ColorInfo = Field(default_factory=lambda: ColorInfo())
-    support_3: ColorInfo = Field(default_factory=lambda: ColorInfo())
-    positive: ColorInfo = Field(default_factory=lambda: ColorInfo())
-    background: ColorInfo = Field(default_factory=lambda: ColorInfo())
+    """Brand color palette - only include colors that actually exist."""
+    background: Optional[ColorInfo] = Field(default=None, description="Background color (if identifiable)")
+    primary: Optional[ColorInfo] = Field(default=None, description="Primary brand color (most prominent)")
+    secondary: Optional[ColorInfo] = Field(default=None, description="Secondary brand color")
+    support_1: Optional[ColorInfo] = Field(default=None, description="Support color 1 (if exists)")
+    support_2: Optional[ColorInfo] = Field(default=None, description="Support color 2 (if exists)")
+    support_3: Optional[ColorInfo] = Field(default=None, description="Support color 3 (if exists)")
+    positive: Optional[ColorInfo] = Field(default=None, description="Positive/CTA color (if identifiable)")
 
 
 class ImageStyle(BaseModel):

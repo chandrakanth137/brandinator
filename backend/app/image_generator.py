@@ -303,7 +303,7 @@ class ImageGenerator:
         
         return visual_traits
     
-    def _build_color_instruction(self, color_palette: Any) -> str:
+    def _build_color_instruction(self, color_palette: any) -> str:
         """
         Build detailed color instructions from the brand's color palette.
         
@@ -312,15 +312,16 @@ class ImageGenerator:
          with #FFFFFF as accent, on a #FAFAFA background"
         
         This is the KEY element that makes generated images match the brand.
+        Handles optional/null color fields gracefully.
         """
         colors = []
         
         # Primary color (most important)
-        if hasattr(color_palette, 'primary') and color_palette.primary.hex:
+        if hasattr(color_palette, 'primary') and color_palette.primary and hasattr(color_palette.primary, 'hex') and color_palette.primary.hex:
             colors.append(f"{color_palette.primary.hex} as the dominant primary color")
         
         # Secondary color
-        if hasattr(color_palette, 'secondary') and color_palette.secondary.hex:
+        if hasattr(color_palette, 'secondary') and color_palette.secondary and hasattr(color_palette.secondary, 'hex') and color_palette.secondary.hex:
             colors.append(f"{color_palette.secondary.hex} as the secondary color")
         
         # Support/accent colors
@@ -328,19 +329,19 @@ class ImageGenerator:
         for attr in ['support_1', 'support_2', 'support_3']:
             if hasattr(color_palette, attr):
                 color_obj = getattr(color_palette, attr)
-                if color_obj.hex:
+                if color_obj and hasattr(color_obj, 'hex') and color_obj.hex:
                     accent_colors.append(color_obj.hex)
         
         if accent_colors:
             colors.append(f"{', '.join(accent_colors)} as accent colors")
         
         # Positive/highlight color
-        if hasattr(color_palette, 'positive') and color_palette.positive.hex:
+        if hasattr(color_palette, 'positive') and color_palette.positive and hasattr(color_palette.positive, 'hex') and color_palette.positive.hex:
             colors.append(f"{color_palette.positive.hex} for highlights")
         
         # Background color
         background = ""
-        if hasattr(color_palette, 'background') and color_palette.background.hex:
+        if hasattr(color_palette, 'background') and color_palette.background and hasattr(color_palette.background, 'hex') and color_palette.background.hex:
             background = f" on a {color_palette.background.hex} background"
         
         if colors:

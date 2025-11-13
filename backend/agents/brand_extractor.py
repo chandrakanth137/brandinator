@@ -159,7 +159,9 @@ class BrandExtractionAgent:
         ))
         
         # Step 2: Extract color palette from website CSS and images
-        print("Extracting color palette from website...")
+        print("\n" + "="*60)
+        print("🎨 EXTRACTING COLOR PALETTE")
+        print("="*60)
         colors = []
         
         # First, extract colors from CSS/styles (background, text, brand colors)
@@ -170,9 +172,11 @@ class BrandExtractionAgent:
                 css_colors = self.color_extractor.extract_from_css(html_content)
                 if css_colors:
                     colors.extend(css_colors)
-                    print(f"  Found {len(css_colors)} colors from CSS")
+                    print(f"\n✓ Extracted {len(css_colors)} colors from CSS/HTML")
+                else:
+                    print(f"\n⚠ No colors found from CSS/HTML")
             except Exception as e:
-                print(f"Error extracting colors from CSS: {e}")
+                print(f"❌ Error extracting colors from CSS: {e}")
         
         # Add computed colors from Playwright if available
         if scraped_data.get('background_color'):
@@ -219,7 +223,9 @@ class BrandExtractionAgent:
             search_results = []
         
         # Step 5: Use LLM to generate structured brand identity with intelligent analysis
-        print("Analyzing content and generating brand identity JSON with LLM...")
+        print("\n" + "="*60)
+        print("🤖 ANALYZING WITH LLM")
+        print("="*60)
         brand_identity = self._generate_brand_identity(
             scraped_data=scraped_data,
             search_results=search_results,
@@ -229,10 +235,34 @@ class BrandExtractionAgent:
         
         # If LLM is not available, use enhanced fallback
         if not self.llm:
-            print("LLM not available, using enhanced fallback extraction...")
+            print("⚠ LLM not available, using enhanced fallback extraction...")
         
         # Add metadata
         brand_identity.metadata.source_pages = source_pages
+        
+        # Log final extracted colors
+        print("\n" + "="*60)
+        print("📊 FINAL BRAND IDENTITY EXTRACTED")
+        print("="*60)
+        print(f"Brand Name: {brand_identity.brand_details.brand_name}")
+        print(f"Personality: {', '.join(brand_identity.brand_details.brand_personality)}")
+        print("\nColor Palette:")
+        cp = brand_identity.image_style.color_palette
+        if cp.background:
+            print(f"  Background: {cp.background.hex} ({cp.background.name})")
+        if cp.primary:
+            print(f"  Primary: {cp.primary.hex} ({cp.primary.name})")
+        if cp.secondary:
+            print(f"  Secondary: {cp.secondary.hex} ({cp.secondary.name})")
+        if cp.support_1:
+            print(f"  Support 1: {cp.support_1.hex} ({cp.support_1.name})")
+        if cp.support_2:
+            print(f"  Support 2: {cp.support_2.hex} ({cp.support_2.name})")
+        if cp.support_3:
+            print(f"  Support 3: {cp.support_3.hex} ({cp.support_3.name})")
+        if cp.positive:
+            print(f"  Positive: {cp.positive.hex} ({cp.positive.name})")
+        print("="*60 + "\n")
         
         return brand_identity
     
@@ -351,15 +381,25 @@ ANALYSIS INSTRUCTIONS:
    - Environment: What settings/contexts are shown or implied
 
 6. **Color Palette**: Use the extracted colors and assign them meaningfully:
-   - Background: The actual website background color (usually white, black, or a brand color)
-   - Primary: Most prominent brand/accent color (often used in logos, CTAs, headers)
-   - Secondary: Supporting brand color (complementary to primary)
-   - Support colors: Additional brand colors found in the design
-   - Positive: Color used for positive actions/CTAs (often green, blue, or accent color)
-   - Text: The main text color (usually black or dark gray on light backgrounds, white on dark)
+   CRITICAL RULES:
+   - ONLY include colors that are CLEARLY present and identifiable
+   - PRIMARY and BACKGROUND are most important - these should almost always be present
+   - Support colors (support_1, support_2, support_3) are OPTIONAL - only include if clearly distinct brand colors exist
+   - If you can only find 1-2 colors, that's perfectly fine! Don't force colors that don't exist.
    
-   IMPORTANT: Only fill colors that are actually found. If a color isn't present, leave it empty.
-   Focus on extracting the actual background, text, and 1-3 main brand colors from the website.
+   Color assignment priority:
+   1. **Background**: The main page background color (often white, black, or a neutral tone)
+   2. **Primary**: THE most prominent brand color (buttons, CTAs, links, headers - the color that defines the brand)
+   3. **Secondary**: Secondary brand color (if clearly present and distinct from primary)
+   4. **Support_1/2/3**: ONLY if there are additional, clearly distinct brand colors
+   5. **Positive**: Color for positive actions (often green/blue, but ONLY if identifiable)
+   
+   Examples:
+   - Minimal: Only background + primary → That's perfectly valid!
+   - Typical: background + primary + secondary → Most common case
+   - Rich: background + primary + secondary + 1-2 support colors → Only for color-rich brands
+   
+   DO NOT fill in colors just to complete the schema. Empty/null is better than incorrect.
 
 Return a complete Brand Identity JSON:
 {{
@@ -378,14 +418,16 @@ Return a complete Brand Identity JSON:
     "props": ["prop1", "prop2"],
     "environment": ["env1", "env2"],
     "color_palette": {{
+      "background": {{"name": "color name", "hex": "#hexcode"}},
       "primary": {{"name": "color name", "hex": "#hexcode"}},
-      "secondary": {{"name": "color name", "hex": "#hexcode"}},
-      "support_1": {{"name": "color name", "hex": "#hexcode"}},
-      "support_2": {{"name": "color name", "hex": "#hexcode"}},
-      "support_3": {{"name": "color name", "hex": "#hexcode"}},
-      "positive": {{"name": "color name", "hex": "#hexcode"}},
-      "background": {{"name": "color name", "hex": "#hexcode"}}
+      "secondary": {{"name": "color name", "hex": "#hexcode"}} or null,
+      "support_1": {{"name": "color name", "hex": "#hexcode"}} or null (only if exists),
+      "support_2": {{"name": "color name", "hex": "#hexcode"}} or null (only if exists),
+      "support_3": {{"name": "color name", "hex": "#hexcode"}} or null (only if exists),
+      "positive": {{"name": "color name", "hex": "#hexcode"}} or null (only if identifiable)
     }}
+    
+REMINDER: It's BETTER to have null/empty support colors than to make up colors that don't exist!
   }}
 }}
 
@@ -410,12 +452,18 @@ CRITICAL: Return ONLY valid JSON. No markdown, no explanations, no additional te
             # Ensure color palette fields are properly formatted (handle None values)
             if 'image_style' in data and 'color_palette' in data['image_style']:
                 color_palette = data['image_style']['color_palette']
-                # Convert None values to empty ColorInfo objects
-                for key in ['primary', 'secondary', 'support_1', 'support_2', 'support_3', 'positive', 'background']:
-                    if key in color_palette and (color_palette[key] is None or not isinstance(color_palette[key], dict)):
-                        color_palette[key] = {"name": "", "hex": ""}
-                    elif key not in color_palette:
-                        color_palette[key] = {"name": "", "hex": ""}
+                # Convert None/invalid values - keep them as None (optional fields)
+                for key in ['background', 'primary', 'secondary', 'support_1', 'support_2', 'support_3', 'positive']:
+                    if key in color_palette:
+                        if color_palette[key] is None:
+                            # Keep as None
+                            continue
+                        elif not isinstance(color_palette[key], dict):
+                            # Invalid format, set to None
+                            color_palette[key] = None
+                        elif not color_palette[key].get('hex'):
+                            # Empty hex, set to None
+                            color_palette[key] = None
             
             return BrandIdentity(**data)
         except Exception as e:
