@@ -22,7 +22,7 @@ from backend.agents.tools import (
     VisionStyleAnalyzer
 )
 from backend.app.models import (
-    BrandIdentity, BrandPersonality, VisualIdentity, DesignStyle, 
+    BrandIdentity, BrandCore, BrandPersonality, VisualIdentity, DesignStyle, 
     ColorPalette, ColorInfo, ImageGenerationGuidelines, TechnicalSpecs, SourcePage
 )
 

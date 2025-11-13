@@ -4,10 +4,8 @@ from typing import List, Dict, Any, Optional, Set
 from urllib.parse import urljoin, urlparse
 import requests
 from bs4 import BeautifulSoup
-from PIL import Image
 from colorthief import ColorThief
 import io
-import os
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
@@ -1555,8 +1553,6 @@ class VisionStyleAnalyzer:
             'lighting': 'natural',
             'color_scheme': 'vibrant'
         }
-        
-        # For now, return placeholder analysis
         
         return style_analysis
 
