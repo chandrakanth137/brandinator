@@ -6,13 +6,20 @@ import os
 from datetime import datetime
 from typing import Optional
 
-# Set API key from Streamlit secrets (for backend modules)
-# Streamlit secrets are accessed via st.secrets, but backend modules use os.getenv
-# So we need to set environment variables from secrets
-if 'GEMINI_API_KEY' in st.secrets:
-    os.environ['GEMINI_API_KEY'] = st.secrets['GEMINI_API_KEY']
-elif 'GOOGLE_API_KEY' in st.secrets:
-    os.environ['GOOGLE_API_KEY'] = st.secrets['GOOGLE_API_KEY']
+# Set API key from Streamlit secrets or environment variables
+# Hugging Face Spaces uses environment variables, Streamlit Cloud uses st.secrets
+# Backend modules use os.getenv, so we ensure the env var is set
+if 'GEMINI_API_KEY' not in os.environ:
+    # Try Streamlit secrets first (Streamlit Cloud)
+    try:
+        if 'GEMINI_API_KEY' in st.secrets:
+            os.environ['GEMINI_API_KEY'] = st.secrets['GEMINI_API_KEY']
+        elif 'GOOGLE_API_KEY' in st.secrets:
+            os.environ['GOOGLE_API_KEY'] = st.secrets['GOOGLE_API_KEY']
+    except:
+        # If st.secrets is not available (e.g., Hugging Face Spaces), 
+        # environment variables should already be set by the platform
+        pass
 
 # Import backend modules
 try:
