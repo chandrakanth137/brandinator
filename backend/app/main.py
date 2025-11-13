@@ -1,4 +1,5 @@
 """FastAPI backend application."""
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -13,10 +14,27 @@ from backend.agents.brand_extractor import BrandExtractionAgent
 from backend.app.image_generator import ImageGenerator
 from backend.app.logger import logger, LOG_FILE
 
+# Global agents (initialized on startup)
+brand_extractor = None
+image_generator = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan event handler for startup and shutdown."""
+    global brand_extractor, image_generator
+    # Startup
+    brand_extractor = BrandExtractionAgent()
+    image_generator = ImageGenerator()
+    yield
+    # Shutdown (if needed in future)
+
+
 app = FastAPI(
     title="Brand Extraction Agent API",
     description="API for extracting brand identity and generating on-brand images",
-    version="0.1.0"
+    version="0.1.0",
+    lifespan=lifespan
 )
 
 # CORS for Streamlit frontend
@@ -27,18 +45,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Global agents (initialized on startup)
-brand_extractor = None
-image_generator = None
-
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize agents on startup."""
-    global brand_extractor, image_generator
-    brand_extractor = BrandExtractionAgent()
-    image_generator = ImageGenerator()
 
 
 @app.get("/")
