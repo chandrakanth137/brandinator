@@ -7,7 +7,7 @@ A full-stack Python application that extracts brand identity from websites and g
 ### Prerequisites
 
 - Python 3.11+
-- [uv](https://github.com/astral-sh/uv) package manager
+- [uv](https://github.com/astral-sh/uv) package manager (will be installed automatically if missing)
 
 ### Installation
 
@@ -18,29 +18,29 @@ A full-stack Python application that extracts brand identity from websites and g
    cd brandinator
    ```
 
-2. **Install dependencies**:
+2. **Run the installation script**:
 
    ```bash
-   uv sync
+   ./install.sh
    ```
 
-3. **Install Playwright browsers** (required for web scraping):
+   This will:
+
+   - Check Python version
+   - Install uv if not present
+   - Install all project dependencies
+   - Install Playwright browsers
+   - Create .env file from .env.example (if it exists)
+   - Make run scripts executable
+
+3. **Set up environment variables**:
+
+   Edit the `.env` file and add your API keys:
 
    ```bash
-   uv run playwright install chromium
+   GEMINI_ANALYSIS_API_KEY=your_key_here
+   GEMINI_IMAGE_API_KEY=your_key_here
    ```
-
-4. **Set up environment variables**:
-
-   ```bash
-   cp .env.example .env
-   # Edit .env and add your API keys
-   ```
-
-   **Required API keys**:
-
-   - `GEMINI_ANALYSIS_API_KEY`: For brand analysis using Google Gemini (required for LLM-based extraction)
-   - `GEMINI_IMAGE_API_KEY`: For image generation using Gemini 2.5 Flash (required for image generation)
 
    Get your API keys from: https://aistudio.google.com/app/apikey
 
@@ -52,13 +52,13 @@ A full-stack Python application that extracts brand identity from websites and g
 ./run_backend.sh
 ```
 
-Or manually:
+The API will be available at `http://localhost:8000`
+
+**Alternative method**:
 
 ```bash
 uv run uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
 ```
-
-The API will be available at `http://localhost:8000`
 
 ### Start the Frontend
 
@@ -68,13 +68,13 @@ In a separate terminal:
 ./run_frontend.sh
 ```
 
-Or manually:
+The UI will be available at `http://localhost:8501`
+
+**Alternative method**:
 
 ```bash
-streamlit run frontend/app.py
+uv run streamlit run frontend/app.py
 ```
-
-The UI will be available at `http://localhost:8501`
 
 ## Design Choices
 
@@ -107,7 +107,4 @@ The UI will be available at `http://localhost:8501`
 
 - **Google Gemini Only**: Removed OpenAI and Ollama support to simplify dependencies and focus on a single LLM provider
 - **No Local Storage**: Images are not saved to disk; only returned as data URLs to reduce storage requirements
-- **Lifespan Events**: Uses FastAPI's modern lifespan pattern for startup/shutdown instead of deprecated `on_event`
 - **Comprehensive Brand Schema**: Flexible Pydantic models that accept descriptive string values instead of strict literals, allowing LLM to provide nuanced brand characteristics
-- **Logging**: Structured logging to `logs/` directory with timestamped files for debugging and tracking
-- **Error Handling**: Graceful fallbacks at every level (scraping, LLM, image generation) to ensure system reliability
