@@ -375,6 +375,78 @@ class BrandExtractionAgent:
             
             data = json.loads(response)
             
+            # Fix None values and invalid types in the response
+            # Fix typography fields
+            if 'visual_identity' in data and 'typography' in data['visual_identity']:
+                typo = data['visual_identity']['typography']
+                if typo.get('primary_font') is None:
+                    typo['primary_font'] = ""
+                if typo.get('secondary_font') is None:
+                    typo['secondary_font'] = ""
+                if typo.get('font_personality') is None:
+                    typo['font_personality'] = []
+                if typo.get('hierarchy_style') is None:
+                    typo['hierarchy_style'] = ""
+            
+            # Fix image generation guidelines
+            if 'image_generation_guidelines' in data:
+                ig = data['image_generation_guidelines']
+                
+                # Fix people_representation.authenticity_level
+                if 'people_representation' in ig:
+                    pr = ig['people_representation']
+                    if 'authenticity_level' in pr:
+                        valid_levels = ['candid', 'natural', 'polished', '']
+                        if pr['authenticity_level'] not in valid_levels:
+                            # Map common invalid values
+                            level = pr['authenticity_level'].lower()
+                            if 'professional' in level or 'polished' in level:
+                                pr['authenticity_level'] = 'polished'
+                            elif 'natural' in level or 'casual' in level:
+                                pr['authenticity_level'] = 'natural'
+                            elif 'candid' in level:
+                                pr['authenticity_level'] = 'candid'
+                            else:
+                                pr['authenticity_level'] = 'natural'  # Default
+                
+                # Fix other literal fields
+                for field in ['environment', 'props_and_objects', 'mood_and_emotion', 'technical_specs']:
+                    if field in ig:
+                        obj = ig[field]
+                        # Fix technology_presence
+                        if field == 'props_and_objects' and 'technology_presence' in obj:
+                            valid = ['high', 'moderate', 'minimal', '']
+                            if obj['technology_presence'] not in valid:
+                                obj['technology_presence'] = 'moderate'
+                        # Fix energy_level
+                        if field == 'mood_and_emotion' and 'energy_level' in obj:
+                            valid = ['high', 'moderate', 'calm', '']
+                            if obj['energy_level'] not in valid:
+                                obj['energy_level'] = 'moderate'
+                        # Fix color_temperature
+                        if field == 'technical_specs' and 'color_temperature' in obj:
+                            valid = ['warm', 'neutral', 'cool', '']
+                            if obj['color_temperature'] not in valid:
+                                obj['color_temperature'] = 'neutral'
+            
+            # Fix brand_voice formality_level
+            if 'brand_voice' in data:
+                bv = data['brand_voice']
+                if 'formality_level' in bv:
+                    valid = ['formal', 'professional', 'casual', 'playful', '']
+                    if bv['formality_level'] not in valid:
+                        level = bv['formality_level'].lower()
+                        if 'formal' in level:
+                            bv['formality_level'] = 'formal'
+                        elif 'professional' in level:
+                            bv['formality_level'] = 'professional'
+                        elif 'casual' in level:
+                            bv['formality_level'] = 'casual'
+                        elif 'playful' in level:
+                            bv['formality_level'] = 'playful'
+                        else:
+                            bv['formality_level'] = 'professional'
+            
             # Ensure color palette fields are properly formatted (handle None values)
             if 'visual_identity' in data and 'color_palette' in data['visual_identity']:
                 color_palette = data['visual_identity']['color_palette']

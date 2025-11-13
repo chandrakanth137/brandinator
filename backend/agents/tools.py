@@ -1182,12 +1182,20 @@ class ColorPaletteExtractor:
         # Filter out common non-brand colors (pure white, pure black, very light grays)
         def is_likely_brand_color(hex_color):
             hex_clean = hex_color.lstrip('#').upper()
-            # Keep black/white if they're from brand elements
-            if hex_clean in ['FFFFFF', '000000', 'FFF', '000']:
-                return any(c['hex'].upper() == hex_color.upper() and c.get('priority', 3) <= 2 for c in colors)
-            # Skip very light grays (unless from brand elements)
+            # Normalize 3-digit hex to 6-digit
+            if len(hex_clean) == 3:
+                hex_clean = ''.join([c*2 for c in hex_clean])
+            
+            # Keep black/white if they're from brand elements (buttons, CTAs, etc.)
+            if hex_clean in ['FFFFFF', '000000']:
+                return any(c['hex'].upper().lstrip('#') == hex_clean and c.get('priority', 3) <= 2 for c in colors)
+            
+            # Skip very light grays (F8F8F8, F9F9F9, etc.) unless from brand elements
             if hex_clean.startswith('F') and len(set(hex_clean)) <= 2:
-                return any(c['hex'].upper() == hex_color.upper() and c.get('priority', 3) == 1 for c in colors)
+                # Only keep if it's from a brand element (priority 1)
+                return any(c['hex'].upper().lstrip('#') == hex_clean and c.get('priority', 3) == 1 for c in colors)
+            
+            # Keep all other colors
             return True
         
         # Sort by priority (lower = more important)
