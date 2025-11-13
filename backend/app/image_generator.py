@@ -2,8 +2,6 @@
 import os
 import base64
 from typing import Optional
-from datetime import datetime
-from pathlib import Path
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -24,9 +22,6 @@ class ImageGenerator:
     
     def __init__(self):
         api_key = os.getenv('GEMINI_IMAGE_API_KEY', '') or os.getenv('GEMINI_API_KEY', '') or os.getenv('GOOGLE_API_KEY', '')
-        
-        self.downloads_dir = Path("generated_images")
-        self.downloads_dir.mkdir(exist_ok=True)
         
         self.prompt_crafter = PromptCraftingAgent()
         
@@ -128,16 +123,10 @@ class ImageGenerator:
                                 
                                 # If data is bytes, convert to base64
                                 if isinstance(image_data, bytes):
-                                    image_bytes = image_data
-                                    image_data_b64 = base64.b64encode(image_bytes).decode('ascii')
+                                    image_data_b64 = base64.b64encode(image_data).decode('ascii')
                                 else:
                                     # Already base64
                                     image_data_b64 = image_data
-                                    image_bytes = base64.b64decode(image_data_b64)
-                                
-                                # Save image locally
-                                file_path = self._save_image(image_bytes, mime_type)
-                                logger.info(f"Image saved to: {file_path}")
                                 
                                 # Return as data URL
                                 return f"data:{mime_type};base64,{image_data_b64}"
@@ -148,29 +137,6 @@ class ImageGenerator:
         except Exception as e:
             logger.error(f"Error processing response: {e}", exc_info=True)
             return None
-    
-    def _save_image(self, image_bytes: bytes, mime_type: str) -> Path:
-        """Save image bytes to local file."""
-        # Determine file extension from MIME type
-        ext_map = {
-            'image/png': 'png',
-            'image/jpeg': 'jpg',
-            'image/jpg': 'jpg',
-            'image/webp': 'webp',
-            'image/gif': 'gif'
-        }
-        extension = ext_map.get(mime_type, 'png')
-        
-        # Create filename with timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"generated_image_{timestamp}.{extension}"
-        file_path = self.downloads_dir / filename
-        
-        # Save the image
-        with open(file_path, 'wb') as f:
-            f.write(image_bytes)
-        
-        return file_path
     
     def _mock_generate(self, prompt: str) -> str:
         """Return a mock image URL for development."""

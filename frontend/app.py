@@ -269,7 +269,6 @@ with col2:
                             mime="image/png",
                             type="primary"
                         )
-                        st.success("✅ Image displayed successfully!")
                     except Exception as decode_error:
                         st.error(f"Error decoding image: {str(decode_error)}")
                         st.info("Attempting fallback display method...")
@@ -297,15 +296,10 @@ with col2:
                             )
                     except Exception as download_error:
                         st.warning(f"Could not prepare download button: {str(download_error)}")
-                    
-                    st.success("✅ Image displayed successfully!")
             except Exception as e:
                 st.error(f"Error displaying image: {str(e)}")
                 st.info("The image URL was generated but could not be displayed. Check the URL below.")
             
-            # Show the URL for reference (download can be done via right-click on image)
-            with st.expander("🔗 Image URL (for reference)"):
-                st.code(image_url[:200] + "..." if len(image_url) > 200 else image_url, language=None)
 
 # Footer
 st.markdown("---")
