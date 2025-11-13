@@ -101,9 +101,3 @@ uv run streamlit run frontend/app.py
 - **Style Transfer**: Generates images that match brand colors, aesthetic, and mood without including brand names or logos
 - **Gemini 2.5 Flash**: Uses Google's Gemini 2.5 Flash for image generation (Nano Banana)
 - **Data URL Response**: Images are returned as base64 data URLs for immediate display, with download button in UI
-
-### Technical Decisions
-
-- **Google Gemini Only**: Removed OpenAI and Ollama support to simplify dependencies and focus on a single LLM provider
-- **No Local Storage**: Images are not saved to disk; only returned as data URLs to reduce storage requirements
-- **Comprehensive Brand Schema**: Flexible Pydantic models that accept descriptive string values instead of strict literals, allowing LLM to provide nuanced brand characteristics
