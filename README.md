@@ -2,44 +2,6 @@
 
 A full-stack Python application that extracts brand identity from websites and generates on-brand images using AI.
 
-## Features
-
-- **Brand Extraction**: Automatically extracts brand identity (mission, vision, personality, color palette, style) from any website
-- **On-Brand Image Generation**: Generates images that match the extracted brand style
-- **LangChain Agent**: Uses LangChain for intelligent brand extraction orchestration
-- **Modern UI**: Clean Streamlit frontend with intuitive interface
-
-## Tech Stack
-
-- **Backend**: FastAPI
-- **Frontend**: Streamlit
-- **Agent Framework**: LangChain
-- **Web Scraping**: Playwright (with BeautifulSoup fallback)
-- **Search**: Playwright-based Google Search (no API key needed)
-- **Image Processing**: Pillow, ColorThief
-- **Package Manager**: uv
-
-## Project Structure
-
-```
-brandinator/
-├── backend/
-│   ├── app/
-│   │   ├── __init__.py
-│   │   ├── main.py          # FastAPI application
-│   │   ├── models.py        # Pydantic models
-│   │   └── image_generator.py
-│   └── agents/
-│       ├── __init__.py
-│       ├── brand_extractor.py  # LangChain agent
-│       └── tools.py            # Extraction tools
-├── frontend/
-│   └── app.py              # Streamlit frontend
-├── pyproject.toml
-├── .env.example
-└── README.md
-```
-
 ## Setup
 
 ### Prerequisites
@@ -49,20 +11,20 @@ brandinator/
 
 ### Installation
 
-1. **Clone the repository** (if applicable):
+1. **Clone the repository**:
 
    ```bash
    git clone <repository-url>
    cd brandinator
    ```
 
-2. **Install dependencies with uv**:
+2. **Install dependencies**:
 
    ```bash
    uv sync
    ```
 
-3. **Install Playwright browsers** (required for web scraping and Google search):
+3. **Install Playwright browsers** (required for web scraping):
 
    ```bash
    uv run playwright install chromium
@@ -75,90 +37,22 @@ brandinator/
    # Edit .env and add your API keys
    ```
 
-   Required API keys (optional for basic functionality):
+   **Required API keys**:
 
-   - `OPENAI_API_KEY`: For LangChain agent (optional, has fallback)
-   - `GEMINI_ANALYSIS_API_KEY`: For brand analysis using Google Gemini (optional, has fallback)
-   - `GEMINI_API_KEY`: Fallback if specific keys not set (optional)
-   - `GOOGLE_PROJECT_ID`: Your Google Cloud Project ID (required for image generation)
-   - `GOOGLE_LOCATION`: Vertex AI region (default: `us-central1`, optional)
+   - `GEMINI_ANALYSIS_API_KEY`: For brand analysis using Google Gemini (required for LLM-based extraction)
+   - `GEMINI_IMAGE_API_KEY`: For image generation using Gemini 2.5 Flash (required for image generation)
 
-   **For Image Generation (Vertex AI Imagen)**:
+   Get your API keys from: https://aistudio.google.com/app/apikey
 
-   You need to complete these steps:
-
-   1. **Create a Google Cloud Project** (if you don't have one)
-
-      - Go to [Google Cloud Console](https://console.cloud.google.com/)
-      - Create a new project or select an existing one
-
-   2. **Enable Billing**
-
-      - Vertex AI is a paid service
-      - Go to Billing section and link your project to a billing account
-
-   3. **Enable the Vertex AI API**
-
-      - Go to [API Library](https://console.cloud.google.com/apis/library)
-      - Search for "Vertex AI API"
-      - Click "Enable" for your project
-
-   4. **Set up Authentication**:
-
-      ```bash
-      # Install gcloud CLI: https://cloud.google.com/sdk/docs/install
-      gcloud auth application-default login
-      ```
-
-      - This opens a browser to authenticate
-      - Use the same Google account that has access to your project
-
-   5. **Set IAM Permissions**:
-
-      - Go to [IAM & Admin](https://console.cloud.google.com/iam-admin/iam)
-      - Find your email address (the one you used for `gcloud auth`)
-      - Click "Edit" (pencil icon)
-      - Add the **"Vertex AI User"** role
-      - Save changes
-
-   6. **Set Environment Variables**:
-      ```bash
-      GOOGLE_PROJECT_ID=your-project-id-here
-      GOOGLE_LOCATION=us-central1  # Optional, defaults to us-central1
-      ```
-
-   **Troubleshooting**: If image generation fails, check the logs in `logs/` directory. Common issues:
-
-   - API not enabled → Enable Vertex AI API in Cloud Console
-   - Billing not enabled → Link project to billing account
-   - Authentication failed → Run `gcloud auth application-default login` again
-   - Missing permissions → Add "Vertex AI User" role in IAM
-
-   **Install Playwright browsers** (required for web scraping and Google search):
-
-   ```bash
-   uv run playwright install chromium
-   ```
-
-## Running Locally
+## How to Run
 
 ### Start the Backend
-
-In one terminal, you can use any of these methods:
-
-**Option 1: Using the run script**
 
 ```bash
 ./run_backend.sh
 ```
 
-**Option 2: Using uv run**
-
-```bash
-uv run backend/app/main.py
-```
-
-**Option 3: Using uvicorn directly**
+Or manually:
 
 ```bash
 uv run uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
@@ -168,15 +62,13 @@ The API will be available at `http://localhost:8000`
 
 ### Start the Frontend
 
-In another terminal:
-
-**Option 1: Using the run script**
+In a separate terminal:
 
 ```bash
 ./run_frontend.sh
 ```
 
-**Option 2: Using streamlit directly**
+Or manually:
 
 ```bash
 streamlit run frontend/app.py
@@ -184,88 +76,38 @@ streamlit run frontend/app.py
 
 The UI will be available at `http://localhost:8501`
 
-## API Endpoints
+## Design Choices
 
-### POST /extract
+### Architecture
 
-Extract brand identity from a website URL.
+- **FastAPI Backend**: RESTful API with async support, providing `/extract` and `/generate` endpoints
+- **Streamlit Frontend**: Single-page application for user interaction
+- **LangChain Agents**: Orchestrates brand extraction workflow with tool usage
+- **Modular Design**: Separation of concerns with dedicated modules for scraping, extraction, and image generation
 
-**Request:**
+### Brand Extraction
 
-```json
-{
-  "url": "https://example.com"
-}
-```
+- **Multi-Page Crawling**: Uses BFS algorithm to crawl multiple pages (homepage, about, products, blog) for comprehensive brand understanding
+- **Sitemap Support**: Automatically detects and uses sitemap.xml when available for efficient URL discovery
+- **Hybrid Scraping Strategy**:
+  - Parallel BeautifulSoup scraping for speed (static content)
+  - Sequential Playwright scraping as fallback (JavaScript-heavy sites)
+  - Smart detection of bot protection and automatic fallback
+- **Computed Style Extraction**: Uses Playwright's computed styles for accurate color and font extraction from rendered pages
+- **LLM-Powered Analysis**: Google Gemini 2.5 Flash analyzes scraped content to infer brand identity, personality, and visual style
 
-**Response:**
+### Image Generation
 
-```json
-{
-  "brand_identity": {
-    "brand_details": {
-      "brand_name": "...",
-      "brand_mission": "...",
-      "brand_vision": "...",
-      "brand_personality": [...]
-    },
-    "image_style": {
-      "style": "...",
-      "keywords": [...],
-      "color_palette": {...}
-    },
-    "_metadata": {
-      "source_pages": [...]
-    }
-  },
-  "source_urls": [...]
-}
-```
+- **Prompt Crafting Agent**: Dedicated LLM agent that intelligently combines user prompts with brand identity, selecting only relevant brand elements
+- **Style Transfer**: Generates images that match brand colors, aesthetic, and mood without including brand names or logos
+- **Gemini 2.5 Flash**: Uses Google's Gemini 2.5 Flash for image generation (Nano Banana)
+- **Data URL Response**: Images are returned as base64 data URLs for immediate display, with download button in UI
 
-### POST /generate
+### Technical Decisions
 
-Generate an on-brand image.
-
-**Request:**
-
-```json
-{
-  "brand_json": {...},
-  "user_prompt": "A professional team working together"
-}
-```
-
-**Response:**
-
-```json
-{
-  "image_url": "https://..."
-}
-```
-
-## Usage
-
-1. **Extract Brand Identity**:
-
-   - Enter a website URL in the frontend
-   - Click "Extract Brand"
-   - View the extracted brand identity JSON
-
-2. **Generate Image**:
-   - After extracting a brand, enter an image prompt
-   - Click "Generate Image"
-   - View the generated on-brand image
-
-## Development
-
-### Adding New Tools
-
-Add new extraction tools in `backend/agents/tools.py` and integrate them into the brand extractor.
-
-### Extending the Agent
-
-Modify `backend/agents/brand_extractor.py` to add new reasoning steps or integrate additional LLM capabilities.
-
-## License
-
-MIT
+- **Google Gemini Only**: Removed OpenAI and Ollama support to simplify dependencies and focus on a single LLM provider
+- **No Local Storage**: Images are not saved to disk; only returned as data URLs to reduce storage requirements
+- **Lifespan Events**: Uses FastAPI's modern lifespan pattern for startup/shutdown instead of deprecated `on_event`
+- **Comprehensive Brand Schema**: Flexible Pydantic models that accept descriptive string values instead of strict literals, allowing LLM to provide nuanced brand characteristics
+- **Logging**: Structured logging to `logs/` directory with timestamped files for debugging and tracking
+- **Error Handling**: Graceful fallbacks at every level (scraping, LLM, image generation) to ensure system reliability
