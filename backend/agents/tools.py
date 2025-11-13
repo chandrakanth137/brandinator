@@ -1339,22 +1339,29 @@ class ColorPaletteExtractor:
         unique_colors = []
         
         # Filter out common non-brand colors (pure white, pure black, very light grays)
-        def is_likely_brand_color(hex_color):
+        def is_likely_brand_color(hex_color, color_obj):
             hex_clean = hex_color.lstrip('#').upper()
             # Normalize 3-digit hex to 6-digit
             if len(hex_clean) == 3:
                 hex_clean = ''.join([c*2 for c in hex_clean])
             
+            # Always keep colors from computed styles (Playwright) - these are accurate
+            if color_obj.get('source') in ['computed_button', 'computed_link', 'computed_background']:
+                return True
+            
             # Keep black/white if they're from brand elements (buttons, CTAs, etc.)
             if hex_clean in ['FFFFFF', '000000']:
-                return any(c['hex'].upper().lstrip('#') == hex_clean and c.get('priority', 3) <= 2 for c in colors)
+                # Keep if from brand elements or computed styles
+                priority = color_obj.get('priority', 999)
+                return priority <= 2  # Brand elements or computed styles
             
             # Skip very light grays (F8F8F8, F9F9F9, etc.) unless from brand elements
             if hex_clean.startswith('F') and len(set(hex_clean)) <= 2:
-                # Only keep if it's from a brand element (priority 1)
-                return any(c['hex'].upper().lstrip('#') == hex_clean and c.get('priority', 3) == 1 for c in colors)
+                # Only keep if it's from a brand element (priority 1) or computed
+                priority = color_obj.get('priority', 999)
+                return priority == 1  # Only high-priority brand colors
             
-            # Keep all other colors
+            # Keep all other colors (medium grays, colored colors, etc.)
             return True
         
         # Sort by priority (lower = more important)
@@ -1362,7 +1369,7 @@ class ColorPaletteExtractor:
         
         for color in colors_sorted:
             hex_upper = color['hex'].upper()
-            if hex_upper not in seen and is_likely_brand_color(color['hex']):
+            if hex_upper not in seen and is_likely_brand_color(color['hex'], color):
                 seen.add(hex_upper)
                 unique_colors.append(color)
         
