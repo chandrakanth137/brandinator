@@ -164,7 +164,7 @@ with col2:
                                 "brand_json": st.session_state.brand_identity,
                                 "user_prompt": user_prompt
                             },
-                            timeout=120  # Increased timeout for image generation
+                            timeout=600  # Increased timeout for image generation (10 minutes for LLM prompt crafting + image generation)
                         )
                         response.raise_for_status()
                         data = response.json()
