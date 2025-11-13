@@ -304,12 +304,14 @@ class WebScraper:
                 if test_url not in visited_urls:
                     to_visit.append(test_url)
         
-        # Step 4: BFS crawl with parallelization
-        print(f"\n📄 Step 2: Crawling pages (BFS with parallel scraping)...")
+        # Step 4: BFS crawl with smart parallelization
+        print(f"\n📄 Step 2: Crawling pages (BFS with smart scraping)...")
         page_type_priority = {'homepage': 0, 'about': 1, 'products': 2, 'blog': 3, 'other': 4}
         pages_by_type = {ptype: [] for ptype in page_type_priority.keys()}
         
-        # Use ThreadPoolExecutor for parallel scraping (3-5 concurrent requests)
+        # Strategy: Try parallel BeautifulSoup first (fast), but if we get 403s,
+        # fall back to sequential Playwright (slower but bypasses protection)
+        use_parallel = True
         max_workers = min(5, max_pages)  # Don't use more threads than pages needed
         from concurrent.futures import ThreadPoolExecutor, as_completed
         
@@ -399,74 +401,151 @@ class WebScraper:
                 visited_urls.add(url)
                 urls_to_scrape.append(url)
         
-        # Scrape pages in parallel
+        # Scrape pages - try parallel first, fall back to sequential if needed
         if urls_to_scrape:
-            print(f"  Scraping {len(urls_to_scrape)} pages with {max_workers} workers...")
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                # Submit all scraping tasks
-                future_to_url = {
-                    executor.submit(scrape_single_page, url): url 
-                    for url in urls_to_scrape
-                }
+            if use_parallel:
+                print(f"  Scraping {len(urls_to_scrape)} pages with {max_workers} workers (parallel)...")
+                failed_count = 0
                 
-                # Process completed tasks as they finish
-                completed = 0
-                for future in as_completed(future_to_url):
-                    url = future_to_url[future]
-                    completed += 1
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    # Submit all scraping tasks
+                    future_to_url = {
+                        executor.submit(scrape_single_page, url): url 
+                        for url in urls_to_scrape
+                    }
+                    
+                    # Process completed tasks as they finish
+                    completed = 0
+                    for future in as_completed(future_to_url):
+                        url = future_to_url[future]
+                        completed += 1
+                        
+                        try:
+                            url_scraped, page_data, error = future.result()
+                            
+                            if error:
+                                if '403' in error or 'Forbidden' in error:
+                                    failed_count += 1
+                                print(f"  [{completed}/{len(urls_to_scrape)}] ✗ {url_scraped}: {error}")
+                                continue
+                            
+                            if not page_data or not page_data.get('title'):
+                                print(f"  [{completed}/{len(urls_to_scrape)}] ✗ {url_scraped}: No data")
+                                failed_count += 1
+                                continue
+                            
+                            # Skip protection pages
+                            if self._is_protection_page(page_data.get('title', ''), page_data.get('text', '')):
+                                print(f"  [{completed}/{len(urls_to_scrape)}] ✗ {url_scraped}: Protection page")
+                                failed_count += 1
+                                continue
+                            
+                            # Check content quality
+                            text_length = len(page_data.get('text', ''))
+                            if text_length < 100:
+                                print(f"  [{completed}/{len(urls_to_scrape)}] ✗ {url_scraped}: Too short ({text_length} chars)")
+                                failed_count += 1
+                                continue
+                            
+                            # Classify page type
+                            page_type = self._classify_page_type(
+                                url_scraped,
+                                page_data.get('title', ''),
+                                page_data.get('text', '')
+                            )
+                            page_data['page_type'] = page_type
+                            
+                            print(f"  [{completed}/{len(urls_to_scrape)}] ✓ [{page_type}] {url_scraped} ({text_length} chars)")
+                            
+                            # Store by type for prioritization
+                            pages_by_type[page_type].append(page_data)
+                            
+                            # Extract links for further crawling (if we need more pages)
+                            total_pages = sum(len(pages) for pages in pages_by_type.values())
+                            if total_pages < max_pages - 1:
+                                html = page_data.get('html', '')
+                                if html:
+                                    new_links = self._extract_links_from_html(html, url_scraped)
+                                    for link in new_links:
+                                        if link not in visited_urls and link not in to_visit:
+                                            # Prioritize important page types
+                                            link_type = self._classify_page_type(link)
+                                            if link_type in ['homepage', 'about', 'products', 'blog']:
+                                                to_visit.appendleft(link)  # Add to front
+                                            else:
+                                                to_visit.append(link)  # Add to back
+                            
+                        except Exception as e:
+                            print(f"  [{completed}/{len(urls_to_scrape)}] ✗ {url}: {e}")
+                            failed_count += 1
+                            continue
+                
+                # If all parallel requests failed (likely 403s), fall back to sequential Playwright
+                total_pages_scraped = sum(len(pages) for pages in pages_by_type.values())
+                if total_pages_scraped == 0 and failed_count > 0 and self.use_playwright:
+                    print(f"\n  ⚠ All parallel requests failed (likely bot protection).")
+                    print(f"  ↳ Falling back to sequential Playwright scraping...")
+                    use_parallel = False
+                    # Clear visited URLs to retry with Playwright
+                    for url in urls_to_scrape:
+                        visited_urls.discard(url)
+                    urls_to_scrape = urls_to_scrape[:max_pages]  # Reset list
+            
+            # Sequential Playwright scraping (for sites with bot protection)
+            if not use_parallel or sum(len(pages) for pages in pages_by_type.values()) < max_pages:
+                print(f"  Scraping {len(urls_to_scrape)} pages sequentially (Playwright)...")
+                for idx, url in enumerate(urls_to_scrape, 1):
+                    if sum(len(pages) for pages in pages_by_type.values()) >= max_pages:
+                        break
                     
                     try:
-                        url_scraped, page_data, error = future.result()
-                        
-                        if error:
-                            print(f"  [{completed}/{len(urls_to_scrape)}] ✗ {url_scraped}: {error}")
-                            continue
+                        print(f"  [{idx}/{len(urls_to_scrape)}] Scraping: {url}")
+                        page_data = self.scrape(url)  # Uses Playwright if available
                         
                         if not page_data or not page_data.get('title'):
-                            print(f"  [{completed}/{len(urls_to_scrape)}] ✗ {url_scraped}: No data")
+                            print(f"    ✗ No data")
                             continue
                         
                         # Skip protection pages
                         if self._is_protection_page(page_data.get('title', ''), page_data.get('text', '')):
-                            print(f"  [{completed}/{len(urls_to_scrape)}] ✗ {url_scraped}: Protection page")
+                            print(f"    ✗ Protection page")
                             continue
                         
                         # Check content quality
                         text_length = len(page_data.get('text', ''))
                         if text_length < 100:
-                            print(f"  [{completed}/{len(urls_to_scrape)}] ✗ {url_scraped}: Too short ({text_length} chars)")
+                            print(f"    ✗ Too short ({text_length} chars)")
                             continue
                         
                         # Classify page type
                         page_type = self._classify_page_type(
-                            url_scraped,
+                            url,
                             page_data.get('title', ''),
                             page_data.get('text', '')
                         )
                         page_data['page_type'] = page_type
                         
-                        print(f"  [{completed}/{len(urls_to_scrape)}] ✓ [{page_type}] {url_scraped} ({text_length} chars)")
+                        print(f"    ✓ [{page_type}] ({text_length} chars)")
                         
                         # Store by type for prioritization
                         pages_by_type[page_type].append(page_data)
                         
-                        # Extract links for further crawling (if we need more pages)
+                        # Extract links for further crawling
                         total_pages = sum(len(pages) for pages in pages_by_type.values())
                         if total_pages < max_pages - 1:
                             html = page_data.get('html', '')
                             if html:
-                                new_links = self._extract_links_from_html(html, url_scraped)
+                                new_links = self._extract_links_from_html(html, url)
                                 for link in new_links:
                                     if link not in visited_urls and link not in to_visit:
-                                        # Prioritize important page types
                                         link_type = self._classify_page_type(link)
                                         if link_type in ['homepage', 'about', 'products', 'blog']:
-                                            to_visit.appendleft(link)  # Add to front
+                                            to_visit.appendleft(link)
                                         else:
-                                            to_visit.append(link)  # Add to back
+                                            to_visit.append(link)
                         
                     except Exception as e:
-                        print(f"  [{completed}/{len(urls_to_scrape)}] ✗ {url}: {e}")
+                        print(f"    ✗ Error: {e}")
                         continue
         
         # Step 5: Prioritize pages by type (homepage > about > products > blog > other)
