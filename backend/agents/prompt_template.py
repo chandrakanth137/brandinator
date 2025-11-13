@@ -52,27 +52,27 @@ EXTRACTION INSTRUCTIONS:
    - typography.primary_font: Primary font family (REQUIRED - use extracted fonts or infer from style)
    - typography.secondary_font: Secondary font family (if different from primary)
    - typography.font_personality: Font personality traits (e.g., ["Clean", "Modern", "Technical"])
-   - imagery_style.primary_type: "photography" | "illustration" | "mixed" | "3d"
-   - imagery_style.photo_style: "candid" | "staged" | "lifestyle" | "product"
-   - imagery_style.lighting: "natural" | "studio" | "dramatic" | "soft"
-   - imagery_style.composition: "minimal" | "balanced" | "dynamic"
-   - imagery_style.color_treatment: "vibrant" | "muted" | "natural" | "filtered"
+   - imagery_style.primary_type: Image type (e.g., "photography", "illustration", "mixed", "3d", or descriptive terms)
+   - imagery_style.photo_style: Photo style (e.g., "candid", "staged", "lifestyle", "product", "stylized", or descriptive terms)
+   - imagery_style.lighting: Lighting style (e.g., "natural", "studio", "dramatic", "soft", or descriptive terms)
+   - imagery_style.composition: Composition style (e.g., "minimal", "balanced", "dynamic", or descriptive terms)
+   - imagery_style.color_treatment: Color treatment (e.g., "vibrant", "muted", "natural", "filtered", or descriptive terms)
 
 4. BRAND VOICE:
    - tone_attributes: Tone descriptors (e.g., ["Friendly", "Professional", "Conversational"])
    - language_style: Language style description
-   - formality_level: "formal" | "professional" | "casual" | "playful"
+   - formality_level: Formality level (e.g., "formal", "professional", "casual", "playful", or descriptive terms)
    - key_phrases: Recurring phrases
    - messaging_approach: How they communicate
 
 5. IMAGE GENERATION GUIDELINES:
-   - people_representation.diversity_level: "high" | "moderate" | "specific"
+   - people_representation.diversity_level: Diversity level (e.g., "high", "moderate", "specific", or descriptive terms)
    - people_representation.featured_occupations: Occupations to feature
    - environment.primary_settings: Primary settings/environments
    - props_and_objects.common_items: Common props/objects
    - mood_and_emotion.target_feelings: Target emotions
-   - mood_and_emotion.energy_level: "high" | "moderate" | "calm"
-   - technical_specs.color_temperature: "warm" | "neutral" | "cool"
+   - mood_and_emotion.energy_level: Energy level (e.g., "high", "moderate", "calm", or descriptive terms)
+   - technical_specs.color_temperature: Color temperature (e.g., "warm", "neutral", "cool", or descriptive terms)
 
 6. CONTENT THEMES:
    - recurring_topics: Recurring content topics

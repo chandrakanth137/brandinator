@@ -90,11 +90,11 @@ class Typography(BaseModel):
 
 class ImageryStyle(BaseModel):
     """Imagery style specifications."""
-    primary_type: Literal["photography", "illustration", "mixed", "3d", ""] = Field(default="", description="Primary image type")
-    photo_style: Literal["candid", "staged", "lifestyle", "product", ""] = Field(default="", description="Photo style")
-    lighting: Literal["natural", "studio", "dramatic", "soft", ""] = Field(default="", description="Lighting style")
-    composition: Literal["minimal", "balanced", "dynamic", ""] = Field(default="", description="Composition style")
-    color_treatment: Literal["vibrant", "muted", "natural", "filtered", ""] = Field(default="", description="Color treatment")
+    primary_type: str = Field(default="", description="Primary image type (e.g., photography, illustration, mixed, 3d)")
+    photo_style: str = Field(default="", description="Photo style (e.g., candid, staged, lifestyle, product, stylized)")
+    lighting: str = Field(default="", description="Lighting style (e.g., natural, studio, dramatic, soft)")
+    composition: str = Field(default="", description="Composition style (e.g., minimal, balanced, dynamic)")
+    color_treatment: str = Field(default="", description="Color treatment (e.g., vibrant, muted, natural, filtered)")
     subject_focus: List[str] = Field(default_factory=list, description="Subject focus areas")
     perspective_preference: List[str] = Field(default_factory=list, description="Perspective preferences")
     use_of_whitespace: str = Field(default="", description="Whitespace usage")
@@ -125,7 +125,7 @@ class BrandVoice(BaseModel):
     """Brand voice and tone."""
     tone_attributes: List[str] = Field(default_factory=list, description="Tone attributes")
     language_style: str = Field(default="", description="Language style")
-    formality_level: Literal["formal", "professional", "casual", "playful", ""] = Field(default="", description="Formality level")
+    formality_level: str = Field(default="", description="Formality level (e.g., formal, professional, casual, playful)")
     key_phrases: List[str] = Field(default_factory=list, description="Key phrases")
     vocabulary_preferences: List[str] = Field(default_factory=list, description="Vocabulary preferences")
     messaging_approach: str = Field(default="", description="Messaging approach")
@@ -137,11 +137,11 @@ class BrandVoice(BaseModel):
 
 class PeopleRepresentation(BaseModel):
     """People representation guidelines."""
-    diversity_level: Literal["high", "moderate", "specific", ""] = Field(default="", description="Diversity level")
+    diversity_level: str = Field(default="", description="Diversity level (e.g., high, moderate, specific)")
     ethnicity_inclusion: List[str] = Field(default_factory=list, description="Ethnicity inclusion")
     age_groups: List[str] = Field(default_factory=list, description="Age groups")
     featured_occupations: List[str] = Field(default_factory=list, description="Featured occupations")
-    authenticity_level: Literal["candid", "natural", "polished", ""] = Field(default="", description="Authenticity level")
+    authenticity_level: str = Field(default="", description="Authenticity level (e.g., candid, natural, polished)")
 
 
 class Environment(BaseModel):
@@ -154,14 +154,14 @@ class Environment(BaseModel):
 class PropsAndObjects(BaseModel):
     """Props and objects guidelines."""
     common_items: List[str] = Field(default_factory=list, description="Common items")
-    technology_presence: Literal["high", "moderate", "minimal", ""] = Field(default="", description="Technology presence")
+    technology_presence: str = Field(default="", description="Technology presence (e.g., high, moderate, minimal)")
     brand_specific_items: List[str] = Field(default_factory=list, description="Brand-specific items")
 
 
 class MoodAndEmotion(BaseModel):
     """Mood and emotion guidelines."""
     target_feelings: List[str] = Field(default_factory=list, description="Target feelings")
-    energy_level: Literal["high", "moderate", "calm", ""] = Field(default="", description="Energy level")
+    energy_level: str = Field(default="", description="Energy level (e.g., high, moderate, calm)")
     atmosphere: List[str] = Field(default_factory=list, description="Atmosphere descriptors")
 
 
@@ -170,7 +170,7 @@ class TechnicalSpecs(BaseModel):
     preferred_aspect_ratios: List[str] = Field(default_factory=list, description="Preferred aspect ratios")
     composition_rules: List[str] = Field(default_factory=list, description="Composition rules")
     depth_of_field: str = Field(default="", description="Depth of field preference")
-    color_temperature: Literal["warm", "neutral", "cool", ""] = Field(default="", description="Color temperature")
+    color_temperature: str = Field(default="", description="Color temperature (e.g., warm, neutral, cool)")
 
 
 class ImageGenerationGuidelines(BaseModel):
