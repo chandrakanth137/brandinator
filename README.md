@@ -35,14 +35,13 @@ A full-stack Python application that extracts brand identity from websites and g
 
 3. **Set up environment variables**:
 
-   Edit the `.env` file and add your API keys:
+   Edit the `.env` file and add your API key:
 
    ```bash
-   GEMINI_ANALYSIS_API_KEY=your_key_here
-   GEMINI_IMAGE_API_KEY=your_key_here
+   GEMINI_API_KEY=your_key_here
    ```
 
-   Get your API keys from: https://aistudio.google.com/app/apikey
+   Get your API key from: https://aistudio.google.com/app/apikey
 
 ## How to Run
 

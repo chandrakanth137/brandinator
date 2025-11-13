@@ -62,15 +62,13 @@ if [ ! -f .env ]; then
         cp .env.example .env
         echo "✓ .env file created from .env.example"
         echo ""
-        echo "⚠ IMPORTANT: Please edit .env and add your API keys:"
-        echo "   - GEMINI_ANALYSIS_API_KEY"
-        echo "   - GEMINI_IMAGE_API_KEY"
+        echo "⚠ IMPORTANT: Please edit .env and add your API key:"
+        echo "   - GEMINI_API_KEY"
         echo ""
-        echo "   Get your API keys from: https://aistudio.google.com/app/apikey"
+        echo "   Get your API key from: https://aistudio.google.com/app/apikey"
     else
         echo "⚠ .env.example not found. Please create .env file manually with:"
-        echo "   GEMINI_ANALYSIS_API_KEY=your_key_here"
-        echo "   GEMINI_IMAGE_API_KEY=your_key_here"
+        echo "   GEMINI_API_KEY=your_key_here"
     fi
 else
     echo "✓ .env file exists"

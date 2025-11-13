@@ -63,7 +63,7 @@ class PromptCraftingAgent:
     def _initialize_llm(self):
         """Initialize LLM with Google Gemini."""
         if GOOGLE_AVAILABLE:
-            api_key = os.getenv('GEMINI_ANALYSIS_API_KEY', '') or os.getenv('GEMINI_API_KEY', '') or os.getenv('GOOGLE_API_KEY', '')
+            api_key = os.getenv('GEMINI_API_KEY', '') or os.getenv('GOOGLE_API_KEY', '')
             if api_key:
                 try:
                     llm = ChatGoogleGenerativeAI(

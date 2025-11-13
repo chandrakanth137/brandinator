@@ -42,7 +42,7 @@ class BrandExtractionAgent:
     def _initialize_llm(self):
         """Initialize LLM with Google Gemini."""
         if GOOGLE_AVAILABLE:
-            api_key = os.getenv('GEMINI_ANALYSIS_API_KEY', '') or os.getenv('GEMINI_API_KEY', '') or os.getenv('GOOGLE_API_KEY', '')
+            api_key = os.getenv('GEMINI_API_KEY', '') or os.getenv('GOOGLE_API_KEY', '')
             if api_key:
                 try:
                     llm = ChatGoogleGenerativeAI(
@@ -55,13 +55,13 @@ class BrandExtractionAgent:
                     print(f"⚠ Google Gemini LLM failed: {e}")
         
         print("⚠ No LLM available - using enhanced rule-based extraction")
-        print("  Set GEMINI_ANALYSIS_API_KEY for Google Gemini")
+        print("  Set GEMINI_API_KEY for Google Gemini")
         return None
     
     def _initialize_llm_with_skip(self, skip_llm=None):
         """Initialize LLM skipping the one that failed."""
         if GOOGLE_AVAILABLE:
-            api_key = os.getenv('GEMINI_ANALYSIS_API_KEY', '') or os.getenv('GEMINI_API_KEY', '') or os.getenv('GOOGLE_API_KEY', '')
+            api_key = os.getenv('GEMINI_API_KEY', '') or os.getenv('GOOGLE_API_KEY', '')
             if api_key:
                 try:
                     llm = ChatGoogleGenerativeAI(

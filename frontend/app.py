@@ -60,7 +60,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Header
-st.markdown('<div class="main-header">🎨 Brand Extraction Agent + On-Brand Image Generation</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">🎨 Brandinator</div>', unsafe_allow_html=True)
 
 # Initialize session state
 if 'brand_identity' not in st.session_state:
@@ -304,7 +304,7 @@ with col2:
 # Footer
 st.markdown("---")
 st.markdown(
-    "<div style='text-align: center; color: #7f8c8d;'>Brand Extraction Agent v0.1.0</div>",
+    "<div style='text-align: center; color: #7f8c8d;'>Brandinator</div>",
     unsafe_allow_html=True
 )
 

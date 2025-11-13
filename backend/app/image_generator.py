@@ -21,7 +21,7 @@ class ImageGenerator:
     """Generate on-brand images using Gemini 2.5 Flash image generation."""
     
     def __init__(self):
-        api_key = os.getenv('GEMINI_IMAGE_API_KEY', '') or os.getenv('GEMINI_API_KEY', '') or os.getenv('GOOGLE_API_KEY', '')
+        api_key = os.getenv('GEMINI_API_KEY', '') or os.getenv('GOOGLE_API_KEY', '')
         
         self.prompt_crafter = PromptCraftingAgent()
         
@@ -42,14 +42,14 @@ class ImageGenerator:
                 logger.error("=" * 60)
                 logger.error("GEMINI API KEY ISSUE")
                 logger.error("=" * 60)
-                logger.error("Set GEMINI_IMAGE_API_KEY or GEMINI_API_KEY in your .env file")
+                logger.error("Set GEMINI_API_KEY in your .env file")
                 logger.error("Get a key from: https://aistudio.google.com/app/apikey")
                 logger.error("=" * 60)
                 self.enabled = False
         else:
             self.enabled = False
             if not api_key:
-                logger.warning("GEMINI_IMAGE_API_KEY not found, image generation will be mocked")
+                logger.warning("GEMINI_API_KEY not found, image generation will be mocked")
                 logger.warning("Get a key from: https://aistudio.google.com/app/apikey")
             if not genai:
                 logger.warning("google-generativeai library not found, image generation will be mocked")
