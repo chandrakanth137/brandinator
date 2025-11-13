@@ -381,7 +381,8 @@ class WebScraper:
                         pages_by_type[page_type].append(page_data)
                         
                         # Extract links for further crawling (if we need more pages)
-                        if len(pages_by_type) < max_pages - 1:
+                        total_pages = sum(len(pages) for pages in pages_by_type.values())
+                        if total_pages < max_pages - 1:
                             html = page_data.get('html', '')
                             if html:
                                 new_links = self._extract_links_from_html(html, url_scraped)
