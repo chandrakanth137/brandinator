@@ -1,6 +1,6 @@
 """Tools for brand extraction agent."""
 import re
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set
 from urllib.parse import urljoin, urlparse
 import requests
 from bs4 import BeautifulSoup
