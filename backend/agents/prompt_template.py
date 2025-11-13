@@ -16,6 +16,7 @@ Pages Crawled:
 Additional Context:
 Search Results: {search_results}
 Extracted Colors: {colors}
+Extracted Fonts: {fonts}
 Style Analysis: {style_analysis}
 
 EXTRACTION INSTRUCTIONS:
@@ -48,8 +49,9 @@ EXTRACTION INSTRUCTIONS:
    - color_palette.secondary: Secondary brand color (optional)
    - color_palette.accent: Accent color (optional)
    - color_palette.neutrals: List of neutral colors
-   - typography.primary_font: Primary font family
-   - typography.font_personality: Font personality traits
+   - typography.primary_font: Primary font family (REQUIRED - use extracted fonts or infer from style)
+   - typography.secondary_font: Secondary font family (if different from primary)
+   - typography.font_personality: Font personality traits (e.g., ["Clean", "Modern", "Technical"])
    - imagery_style.primary_type: "photography" | "illustration" | "mixed" | "3d"
    - imagery_style.photo_style: "candid" | "staged" | "lifestyle" | "product"
    - imagery_style.lighting: "natural" | "studio" | "dramatic" | "soft"
@@ -78,10 +80,17 @@ EXTRACTION INSTRUCTIONS:
    - content_pillars: Main content pillars
 
 CRITICAL COLOR RULES:
-- ONLY include colors that are CLEARLY present
-- Primary is REQUIRED if any brand color exists
-- Secondary, accent, neutrals are OPTIONAL
-- Use null/empty for missing colors - DO NOT make up colors
+- PRIMARY COLOR IS REQUIRED - Extract the most prominent brand color (buttons, CTAs, links)
+- If no colors found in extracted data, ANALYZE the website style and INFER likely brand colors
+- For tech/modern brands: Often black, white, blue, or brand-specific accent colors
+- Secondary, accent, neutrals are OPTIONAL but should be included if identifiable
+- Background color should be included if clearly identifiable (often white or black)
+
+CRITICAL TYPOGRAPHY RULES:
+- PRIMARY_FONT IS REQUIRED - Use extracted fonts if available, otherwise INFER from style
+- Modern tech brands often use: Inter, Roboto, Helvetica, Arial, system fonts
+- SaaS platforms: Often Inter, SF Pro, or custom sans-serif fonts
+- If extracted fonts exist, use them. If not, infer based on brand style.
 
 Return ONLY valid JSON matching this structure:
 {{

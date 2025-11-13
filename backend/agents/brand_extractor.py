@@ -31,6 +31,7 @@ from backend.agents.tools import (
     WebScraper,
     GoogleSearchTool,
     ColorPaletteExtractor,
+    TypographyExtractor,
     VisionStyleAnalyzer
 )
 from backend.app.models import (
@@ -48,6 +49,7 @@ class BrandExtractionAgent:
         self.web_scraper = WebScraper()
         self.search_tool = GoogleSearchTool()
         self.color_extractor = ColorPaletteExtractor()
+        self.typography_extractor = TypographyExtractor()
         self.vision_analyzer = VisionStyleAnalyzer()
         
         # Initialize LLM with multiple provider support and fallbacks
@@ -175,22 +177,47 @@ class BrandExtractionAgent:
         # Use homepage as primary data source
         homepage = all_pages[0] if all_pages else {}
         
-        # Step 2: Extract color palette from all pages
+        # Step 2: Extract color palette and typography from all pages
         print("\n" + "="*60)
-        print("🎨 EXTRACTING COLOR PALETTE")
+        print("🎨 EXTRACTING COLOR PALETTE & TYPOGRAPHY")
         print("="*60)
         colors = []
+        fonts_info = {}
         
-        # Extract colors from all pages' HTML
+        # Extract colors and fonts from all pages' HTML
         for page in all_pages:
             html_content = page.get('html', '')
             if html_content:
                 try:
-                    css_colors = self.color_extractor.extract_from_css(html_content)
+                    # Extract colors with computed colors from Playwright
+                    computed_colors = {
+                        'background_color': page.get('background_color'),
+                        'text_color': page.get('text_color'),
+                        'key_colors': page.get('key_colors')
+                    }
+                    css_colors = self.color_extractor.extract_from_css(
+                        html_content, 
+                        computed_colors=computed_colors if any(computed_colors.values()) else None
+                    )
                     if css_colors:
                         colors.extend(css_colors)
+                    
+                    # Extract fonts
+                    computed_fonts = page.get('fonts')
+                    page_fonts = self.typography_extractor.extract_fonts(
+                        html_content,
+                        computed_fonts=computed_fonts
+                    )
+                    if page_fonts.get('primary_font'):
+                        if 'primary_font' not in fonts_info or not fonts_info['primary_font']:
+                            fonts_info['primary_font'] = page_fonts['primary_font']
+                        if page_fonts.get('secondary_font') and 'secondary_font' not in fonts_info:
+                            fonts_info['secondary_font'] = page_fonts['secondary_font']
+                        if 'font_families' not in fonts_info:
+                            fonts_info['font_families'] = []
+                        fonts_info['font_families'].extend(page_fonts.get('font_families', []))
                 except Exception as e:
-                    print(f"  Error extracting colors from {page.get('url', 'unknown')}: {e}")
+                    print(f"  Error extracting from {page.get('url', 'unknown')}: {e}")
         
         # Deduplicate colors
         seen_hex = set()
@@ -202,7 +229,13 @@ class BrandExtractionAgent:
                 unique_colors.append(color)
         colors = unique_colors[:20]  # Keep top 20 unique colors
         
+        # Deduplicate fonts
+        if 'font_families' in fonts_info:
+            fonts_info['font_families'] = list(dict.fromkeys(fonts_info['font_families']))[:5]
+        
         print(f"✓ Extracted {len(colors)} unique colors across all pages")
+        if fonts_info.get('primary_font'):
+            print(f"✓ Extracted fonts: Primary={fonts_info.get('primary_font')}, Secondary={fonts_info.get('secondary_font', 'N/A')}")
         
         # Step 3: Analyze visual style from images
         print("\n📸 Analyzing visual style from images...")
@@ -356,6 +389,7 @@ class BrandExtractionAgent:
             page_summaries=page_summaries_str,
             search_results=json.dumps(context.get('search_results', []), indent=2),
             colors=json.dumps(context.get('colors', []), indent=2),
+            fonts=json.dumps(context.get('fonts', {}), indent=2),
             style_analysis=json.dumps(context.get('style_analysis', {}), indent=2)
         )
 

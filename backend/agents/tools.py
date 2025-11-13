@@ -645,10 +645,11 @@ class WebScraper:
             html = page.content()
             soup = BeautifulSoup(html, 'html.parser')
             
-            # Extract computed styles for background and text colors
+            # Extract computed styles for background, text colors, and fonts
             try:
                 body_element = page.query_selector('body') or page.query_selector('main')
                 if body_element:
+                    # Extract colors
                     bg_color = page.evaluate("""
                         (element) => {
                             const style = window.getComputedStyle(element);
@@ -661,9 +662,56 @@ class WebScraper:
                             return style.color || '';
                         }
                     """, body_element)
+                    
+                    # Extract fonts from body and headings
+                    fonts_data = page.evaluate("""
+                        () => {
+                            const body = document.body;
+                            const h1 = document.querySelector('h1');
+                            const h2 = document.querySelector('h2');
+                            const bodyStyle = window.getComputedStyle(body);
+                            const h1Style = h1 ? window.getComputedStyle(h1) : null;
+                            const h2Style = h2 ? window.getComputedStyle(h2) : null;
+                            
+                            return {
+                                body_font: bodyStyle.fontFamily || '',
+                                h1_font: h1Style ? h1Style.fontFamily : '',
+                                h2_font: h2Style ? h2Style.fontFamily : '',
+                                body_font_size: bodyStyle.fontSize || '',
+                                h1_font_size: h1Style ? h1Style.fontSize : '',
+                            };
+                        }
+                    """)
+                    
+                    # Extract colors from key elements (buttons, links, headers)
+                    key_colors = page.evaluate("""
+                        () => {
+                            const button = document.querySelector('button, a[class*="btn"], [class*="button"]');
+                            const link = document.querySelector('a:not([class*="btn"])');
+                            const header = document.querySelector('header, nav');
+                            
+                            const colors = {};
+                            if (button) {
+                                const style = window.getComputedStyle(button);
+                                colors.button_bg = style.backgroundColor || '';
+                                colors.button_color = style.color || '';
+                            }
+                            if (link) {
+                                const style = window.getComputedStyle(link);
+                                colors.link_color = style.color || '';
+                            }
+                            if (header) {
+                                const style = window.getComputedStyle(header);
+                                colors.header_bg = style.backgroundColor || '';
+                            }
+                            return colors;
+                        }
+                    """)
             except:
                 bg_color = None
                 text_color = None
+                fonts_data = None
+                key_colors = None
             
             # Extract title
             title = page.title()
@@ -727,6 +775,14 @@ class WebScraper:
                 result['background_color'] = bg_color
             if 'text_color' in locals() and text_color:
                 result['text_color'] = text_color
+            
+            # Add computed fonts if available
+            if 'fonts_data' in locals() and fonts_data:
+                result['fonts'] = fonts_data
+            
+            # Add key element colors if available
+            if 'key_colors' in locals() and key_colors:
+                result['key_colors'] = key_colors
             
             return result
         finally:
@@ -1012,10 +1068,77 @@ class GoogleSearchTool:
             page.close()
 
 
+class TypographyExtractor:
+    """Extract typography information from websites."""
+    
+    def extract_fonts(self, html_content: str, computed_fonts: Dict = None, soup: BeautifulSoup = None) -> Dict[str, str]:
+        """Extract font families from CSS and computed styles."""
+        fonts = {
+            'primary_font': '',
+            'secondary_font': '',
+            'font_families': []
+        }
+        
+        if soup is None:
+            soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Font family regex pattern
+        font_pattern = re.compile(r'font-family\s*:\s*([^;]+)', re.IGNORECASE)
+        font_families = set()
+        
+        # Extract from style tags
+        for style_tag in soup.find_all('style'):
+            style_content = style_tag.string or ''
+            for match in font_pattern.finditer(style_content):
+                font_list = match.group(1).strip()
+                # Parse font stack (e.g., "Arial, sans-serif" -> "Arial")
+                fonts_in_stack = [f.strip().strip('"\'') for f in font_list.split(',')]
+                for font in fonts_in_stack[:2]:  # Take first 2 fonts from stack
+                    if font and font.lower() not in ['sans-serif', 'serif', 'monospace', 'cursive', 'fantasy']:
+                        font_families.add(font)
+        
+        # Extract from inline styles
+        for element in soup.find_all(style=True):
+            style = element.get('style', '')
+            for match in font_pattern.finditer(style):
+                font_list = match.group(1).strip()
+                fonts_in_stack = [f.strip().strip('"\'') for f in font_list.split(',')]
+                for font in fonts_in_stack[:2]:
+                    if font and font.lower() not in ['sans-serif', 'serif', 'monospace', 'cursive', 'fantasy']:
+                        font_families.add(font)
+        
+        # Use computed fonts from Playwright if available (more accurate)
+        if computed_fonts:
+            if computed_fonts.get('body_font'):
+                body_font = computed_fonts['body_font'].split(',')[0].strip().strip('"\'')
+                if body_font and body_font.lower() not in ['sans-serif', 'serif', 'monospace']:
+                    font_families.add(body_font)
+                    fonts['primary_font'] = body_font
+            
+            if computed_fonts.get('h1_font'):
+                h1_font = computed_fonts['h1_font'].split(',')[0].strip().strip('"\'')
+                if h1_font and h1_font.lower() not in ['sans-serif', 'serif', 'monospace']:
+                    font_families.add(h1_font)
+                    if not fonts['primary_font']:
+                        fonts['primary_font'] = h1_font
+                    elif h1_font != fonts['primary_font']:
+                        fonts['secondary_font'] = h1_font
+        
+        # Convert set to list and assign
+        font_list = list(font_families)
+        if font_list:
+            fonts['primary_font'] = fonts['primary_font'] or font_list[0]
+            if len(font_list) > 1:
+                fonts['secondary_font'] = font_list[1]
+            fonts['font_families'] = font_list[:5]  # Keep top 5
+        
+        return fonts
+
+
 class ColorPaletteExtractor:
     """Extract color palette from images and website CSS."""
     
-    def extract_from_css(self, html_content: str, soup: BeautifulSoup = None) -> List[Dict[str, str]]:
+    def extract_from_css(self, html_content: str, computed_colors: Dict = None, soup: BeautifulSoup = None) -> List[Dict[str, str]]:
         """Extract colors from CSS styles in the HTML with focus on BRAND colors."""
         colors = []
         # Improved regex patterns for color extraction
@@ -1174,6 +1297,42 @@ class ColorPaletteExtractor:
                             })
         except:
             pass
+        
+        # Add computed colors from Playwright (most accurate)
+        if computed_colors:
+            # Background color
+            if computed_colors.get('background_color'):
+                bg_hex = self._parse_color_value(computed_colors['background_color'])
+                if bg_hex:
+                    colors.append({
+                        'name': 'background',
+                        'hex': bg_hex.upper(),
+                        'source': 'computed_background',
+                        'priority': 1  # High priority - actual computed value
+                    })
+            
+            # Button colors (primary brand color)
+            if computed_colors.get('key_colors'):
+                kc = computed_colors['key_colors']
+                if kc.get('button_bg'):
+                    btn_hex = self._parse_color_value(kc['button_bg'])
+                    if btn_hex and btn_hex.upper() not in ['#FFFFFF', '#000000']:  # Skip pure white/black
+                        colors.append({
+                            'name': 'primary',
+                            'hex': btn_hex.upper(),
+                            'source': 'computed_button',
+                            'priority': 1  # Very high priority - button color is usually primary
+                        })
+                
+                if kc.get('link_color'):
+                    link_hex = self._parse_color_value(kc['link_color'])
+                    if link_hex and link_hex.upper() not in ['#000000', '#FFFFFF']:
+                        colors.append({
+                            'name': 'accent',
+                            'hex': link_hex.upper(),
+                            'source': 'computed_link',
+                            'priority': 1
+                        })
         
         # Deduplicate by hex and sort by priority
         seen = set()
