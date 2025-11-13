@@ -578,11 +578,64 @@ class WebScraper:
                 'Upgrade-Insecure-Requests': '1',
             })
             
-            # Navigate to the page
-            page.goto(url, wait_until='domcontentloaded', timeout=30000)
+            # Navigate to the page - use 'networkidle' for JS-heavy sites
+            # This waits for network connections to be idle (no requests for 500ms)
+            try:
+                page.goto(url, wait_until='networkidle', timeout=60000)
+            except Exception as e:
+                # Fallback to 'load' if networkidle times out
+                print(f"  Networkidle timeout, trying 'load' strategy: {e}")
+                try:
+                    page.goto(url, wait_until='load', timeout=60000)
+                except:
+                    # Last resort: domcontentloaded
+                    page.goto(url, wait_until='domcontentloaded', timeout=30000)
             
             # Wait for dynamic content and potential protection pages
             page.wait_for_timeout(wait_time)
+            
+            # For JS-heavy sites: Scroll to trigger lazy-loaded content
+            try:
+                # Scroll down slowly to trigger any lazy-loaded content
+                page.evaluate("""
+                    async () => {
+                        const scrollHeight = document.documentElement.scrollHeight;
+                        const viewportHeight = window.innerHeight;
+                        const scrollStep = viewportHeight * 0.8;
+                        let currentPosition = 0;
+                        
+                        while (currentPosition < scrollHeight) {
+                            window.scrollTo(0, currentPosition);
+                            await new Promise(resolve => setTimeout(resolve, 300));
+                            currentPosition += scrollStep;
+                        }
+                        // Scroll back to top
+                        window.scrollTo(0, 0);
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+                """)
+            except Exception as e:
+                print(f"  Scroll failed (non-critical): {e}")
+            
+            # Wait for content to actually appear (not just DOM ready)
+            try:
+                page.wait_for_function(
+                    """
+                    () => {
+                        const body = document.body;
+                        if (!body) return false;
+                        const text = body.innerText || body.textContent || '';
+                        // Wait for substantial content (at least 100 chars)
+                        return text.length > 100;
+                    }
+                    """,
+                    timeout=10000
+                )
+            except Exception as e:
+                print(f"  Content wait timeout (non-critical): {e}")
+            
+            # Additional wait for any remaining JS to execute
+            page.wait_for_timeout(2000)
             
             # Check if we're on a protection page and wait for it to resolve
             page_title = page.title()
