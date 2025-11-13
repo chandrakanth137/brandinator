@@ -142,24 +142,123 @@ class WebScraper:
                 print("Install Playwright to bypass: uv run playwright install chromium")
             return result
     
-    def crawl_website(self, base_url: str, max_pages: int = 5) -> List[Dict[str, Any]]:
-        """
-        Crawl multiple pages from a website.
+    def _normalize_url(self, url: str) -> str:
+        """Normalize URL by removing fragments and trailing slashes."""
+        from urllib.parse import urlparse, urlunparse
+        parsed = urlparse(url)
+        # Remove fragment and normalize path
+        normalized = urlunparse((
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path.rstrip('/') or '/',
+            parsed.params,
+            parsed.query,
+            ''  # Remove fragment
+        ))
+        return normalized
+    
+    def _is_same_domain(self, url: str, base_domain: str) -> bool:
+        """Check if URL belongs to the same domain."""
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        base_parsed = urlparse(base_domain)
+        return parsed.netloc == base_parsed.netloc or parsed.netloc == ''
+    
+    def _fetch_sitemap_urls(self, base_url: str) -> List[str]:
+        """Try to fetch URLs from sitemap.xml files."""
+        from urllib.parse import urljoin
+        from bs4 import BeautifulSoup
         
-        Visits:
-        - Homepage (base_url)
-        - About page (/about, /about-us, etc.)
-        - Products/Services page (/products, /services, etc.)
-        - Blog page (/blog, /news, etc.)
+        sitemap_urls = [
+            urljoin(base_url, '/sitemap.xml'),
+            urljoin(base_url, '/sitemap_index.xml'),
+            urljoin(base_url, '/sitemap1.xml'),
+        ]
+        
+        found_urls = []
+        
+        for sitemap_url in sitemap_urls:
+            try:
+                response = self.session.get(sitemap_url, timeout=10)
+                if response.status_code == 200:
+                    # Try parsing as XML
+                    soup = BeautifulSoup(response.content, 'xml')
+                    locs = soup.find_all('loc')
+                    
+                    if locs:
+                        urls = [loc.text.strip() for loc in locs if loc.text]
+                        found_urls.extend(urls)
+                        print(f"  ✓ Found {len(urls)} URLs in {sitemap_url}")
+                        break
+            except Exception as e:
+                continue
+        
+        return found_urls
+    
+    def _extract_links_from_html(self, html: str, current_url: str) -> Set[str]:
+        """Extract all internal links from HTML."""
+        from urllib.parse import urljoin, urlparse
+        from bs4 import BeautifulSoup
+        
+        soup = BeautifulSoup(html, 'html.parser')
+        links = set()
+        
+        for link in soup.find_all('a', href=True):
+            href = link.get('href', '').strip()
+            if not href or href.startswith('#') or href.startswith('javascript:'):
+                continue
+            
+            # Join with current URL
+            absolute_url = urljoin(current_url, href)
+            normalized = self._normalize_url(absolute_url)
+            
+            # Only keep same-domain links
+            if self._is_same_domain(normalized, current_url):
+                links.add(normalized)
+        
+        return links
+    
+    def _classify_page_type(self, url: str, title: str = '', text: str = '') -> str:
+        """Classify page type based on URL and content."""
+        url_lower = url.lower()
+        title_lower = title.lower()
+        text_lower = text.lower()[:500]  # Check first 500 chars
+        
+        # Check URL patterns first
+        if any(x in url_lower for x in ['/about', '/about-us', '/aboutus', '/company']):
+            return 'about'
+        elif any(x in url_lower for x in ['/contact', '/contact-us']):
+            return 'other'
+        elif any(x in url_lower for x in ['/blog', '/blogs', '/news', '/articles', '/posts', '/post']):
+            return 'blog'
+        elif any(x in url_lower for x in ['/product', '/products', '/shop', '/store', '/service', '/services']):
+            return 'products'
+        elif url.rstrip('/') == url.rstrip('/').split('?')[0] and not url_lower.endswith(('.html', '.php', '.aspx')):
+            # Likely homepage if it's just the base domain
+            return 'homepage'
+        else:
+            return 'other'
+    
+    def crawl_website(self, base_url: str, max_pages: int = 5, use_sitemap: bool = True) -> List[Dict[str, Any]]:
+        """
+        Crawl multiple pages from a website using BFS with sitemap support.
+        
+        Strategy:
+        1. Try to fetch sitemap.xml for comprehensive URL list
+        2. Scrape homepage to extract links
+        3. Use BFS to crawl important pages (about, products, blog)
+        4. Prioritize pages by type and content quality
         
         Args:
             base_url: Base website URL
             max_pages: Maximum number of pages to crawl (default: 5)
+            use_sitemap: Whether to try using sitemap.xml (default: True)
             
         Returns:
             List of scraped page data, each with 'url' and page content
         """
-        from urllib.parse import urljoin, urlparse
+        from collections import deque
+        from urllib.parse import urlparse
         
         print(f"\n{'='*60}")
         print(f"🌐 CRAWLING WEBSITE: {base_url}")
@@ -167,131 +266,114 @@ class WebScraper:
         
         parsed_base = urlparse(base_url)
         base_domain = f"{parsed_base.scheme}://{parsed_base.netloc}"
-        
-        # Common page paths to look for
-        common_paths = [
-            ('', 'homepage'),
-            ('/about', 'about'),
-            ('/about-us', 'about'),
-            ('/aboutus', 'about'),
-            ('/products', 'products'),
-            ('/product', 'products'),
-            ('/services', 'products'),
-            ('/service', 'products'),
-            ('/blog', 'blog'),
-            ('/blogs', 'blog'),
-            ('/news', 'blog'),
-            ('/articles', 'blog'),
-            ('/contact', 'other'),
-            ('/contact-us', 'other'),
-        ]
+        base_url_normalized = self._normalize_url(base_url)
         
         pages_to_scrape = []
         visited_urls = set()
+        to_visit = deque()
         
-        # First, scrape homepage to find additional links
-        print(f"\n📄 Step 1: Scraping homepage...")
-        homepage_data = self.scrape(base_url)
-        if homepage_data:
-            homepage_data['page_type'] = 'homepage'
-            pages_to_scrape.append(homepage_data)
-            visited_urls.add(base_url.rstrip('/'))
+        # Step 1: Try to fetch sitemap.xml
+        sitemap_urls = []
+        if use_sitemap:
+            print(f"\n📋 Step 1: Checking for sitemap.xml...")
+            sitemap_urls = self._fetch_sitemap_urls(base_url)
+            if sitemap_urls:
+                print(f"  ✓ Found {len(sitemap_urls)} URLs from sitemap")
+                # Add sitemap URLs to queue (prioritize important pages)
+                for url in sitemap_urls[:max_pages * 2]:  # Get more than needed for filtering
+                    normalized = self._normalize_url(url)
+                    if self._is_same_domain(normalized, base_url):
+                        to_visit.append(normalized)
+            else:
+                print(f"  ✗ No sitemap found, using link discovery")
         
-        # Extract links from homepage
-        all_links = homepage_data.get('links', []) if homepage_data else []
+        # Step 2: Always start with homepage
+        if base_url_normalized not in visited_urls:
+            to_visit.appendleft(base_url_normalized)  # Prioritize homepage
         
-        # Try common paths
-        print(f"\n📄 Step 2: Finding and scraping key pages...")
-        for path, page_type in common_paths:
-            if len(pages_to_scrape) >= max_pages:
-                break
-                
-            test_url = urljoin(base_url, path)
-            test_url_clean = test_url.rstrip('/')
+        # Step 3: Add common important pages if not in sitemap
+        if not sitemap_urls:
+            from urllib.parse import urljoin
+            common_paths = [
+                '/about', '/about-us', '/aboutus',
+                '/products', '/product', '/services', '/service',
+                '/blog', '/blogs', '/news', '/articles'
+            ]
+            for path in common_paths:
+                test_url = self._normalize_url(urljoin(base_url, path))
+                if test_url not in visited_urls:
+                    to_visit.append(test_url)
+        
+        # Step 4: BFS crawl with prioritization
+        print(f"\n📄 Step 2: Crawling pages (BFS)...")
+        page_type_priority = {'homepage': 0, 'about': 1, 'products': 2, 'blog': 3, 'other': 4}
+        pages_by_type = {ptype: [] for ptype in page_type_priority.keys()}
+        
+        while to_visit and len(pages_to_scrape) < max_pages:
+            url = to_visit.popleft()
             
-            # Skip if already visited
-            if test_url_clean in visited_urls:
+            if url in visited_urls:
                 continue
             
-            # Check if this URL exists in the links we found
-            url_matches = any(
-                test_url_clean in link or link in test_url_clean 
-                for link in all_links
-            )
+            visited_urls.add(url)
             
-            # Try to scrape this page
             try:
-                print(f"  Trying: {test_url}")
-                page_data = self.scrape(test_url)
+                print(f"  [{len(pages_to_scrape) + 1}/{max_pages}] Scraping: {url}")
+                page_data = self.scrape(url)
                 
-                # Check if we got valid content (not 404, not empty)
-                if page_data and page_data.get('title') and not self._is_protection_page(
-                    page_data.get('title', ''), page_data.get('text', '')
-                ):
-                    # Check if content is meaningful (not just error pages)
-                    text_length = len(page_data.get('text', ''))
-                    if text_length > 100:  # At least 100 chars of content
-                        page_data['page_type'] = page_type
-                        pages_to_scrape.append(page_data)
-                        visited_urls.add(test_url_clean)
-                        print(f"    ✓ Found {page_type} page ({text_length} chars)")
-                    else:
-                        print(f"    ✗ Page too short ({text_length} chars)")
-                else:
-                    print(f"    ✗ Page not accessible or empty")
+                if not page_data or not page_data.get('title'):
+                    continue
+                
+                # Skip protection pages
+                if self._is_protection_page(page_data.get('title', ''), page_data.get('text', '')):
+                    continue
+                
+                # Check content quality
+                text_length = len(page_data.get('text', ''))
+                if text_length < 100:  # Skip very short pages
+                    continue
+                
+                # Classify page type
+                page_type = self._classify_page_type(
+                    url,
+                    page_data.get('title', ''),
+                    page_data.get('text', '')
+                )
+                page_data['page_type'] = page_type
+                
+                # Store by type for prioritization
+                pages_by_type[page_type].append(page_data)
+                
+                # Extract links for further crawling (if we need more pages)
+                if len(pages_to_scrape) < max_pages - 1:
+                    html = page_data.get('html', '')
+                    if html:
+                        new_links = self._extract_links_from_html(html, url)
+                        for link in new_links:
+                            if link not in visited_urls and link not in to_visit:
+                                # Prioritize important page types
+                                link_type = self._classify_page_type(link)
+                                if link_type in ['homepage', 'about', 'products', 'blog']:
+                                    to_visit.appendleft(link)  # Add to front
+                                else:
+                                    to_visit.append(link)  # Add to back
+                
             except Exception as e:
                 print(f"    ✗ Error: {e}")
                 continue
         
-        # If we still need more pages, try links from homepage
-        if len(pages_to_scrape) < max_pages and all_links:
-            print(f"\n📄 Step 3: Exploring additional pages from homepage links...")
-            for link in all_links[:10]:  # Try first 10 links
-                if len(pages_to_scrape) >= max_pages:
-                    break
-                
-                # Only follow internal links
-                parsed_link = urlparse(link)
-                if parsed_link.netloc and parsed_link.netloc != parsed_base.netloc:
-                    continue
-                
-                link_clean = link.rstrip('/')
-                if link_clean in visited_urls:
-                    continue
-                
-                # Skip common non-content pages
-                skip_patterns = ['/login', '/signup', '/register', '/cart', '/checkout', 
-                               '/account', '/profile', '/search', '/tag/', '/category/']
-                if any(pattern in link.lower() for pattern in skip_patterns):
-                    continue
-                
-                try:
-                    print(f"  Trying: {link}")
-                    page_data = self.scrape(link)
-                    
-                    if page_data and page_data.get('title') and len(page_data.get('text', '')) > 200:
-                        # Determine page type from URL
-                        link_lower = link.lower()
-                        if 'about' in link_lower:
-                            page_type = 'about'
-                        elif any(x in link_lower for x in ['product', 'service', 'shop']):
-                            page_type = 'products'
-                        elif any(x in link_lower for x in ['blog', 'news', 'article', 'post']):
-                            page_type = 'blog'
-                        else:
-                            page_type = 'other'
-                        
-                        page_data['page_type'] = page_type
-                        pages_to_scrape.append(page_data)
-                        visited_urls.add(link_clean)
-                        print(f"    ✓ Found {page_type} page")
-                except Exception as e:
-                    continue
+        # Step 5: Prioritize pages by type (homepage > about > products > blog > other)
+        for ptype in ['homepage', 'about', 'products', 'blog', 'other']:
+            pages_to_scrape.extend(pages_by_type[ptype][:max_pages])
+            if len(pages_to_scrape) >= max_pages:
+                break
+        
+        pages_to_scrape = pages_to_scrape[:max_pages]  # Limit to max_pages
         
         print(f"\n{'='*60}")
         print(f"✓ Crawled {len(pages_to_scrape)} pages:")
         for i, page in enumerate(pages_to_scrape, 1):
-            print(f"  {i}. {page.get('url', 'unknown')} ({page.get('page_type', 'unknown')})")
+            print(f"  {i}. [{page.get('page_type', 'unknown')}] {page.get('url', 'unknown')}")
         print(f"{'='*60}\n")
         
         return pages_to_scrape
