@@ -322,6 +322,7 @@ class BrandExtractionAgent:
             'page_summaries': page_summaries,
             'search_results': search_results[:3],
             'colors': colors[:15],
+            'fonts': fonts_info if fonts_info else {},
             'style_analysis': style_analysis
         }
         
