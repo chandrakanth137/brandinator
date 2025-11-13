@@ -16,6 +16,7 @@ except ImportError:
 
 from backend.app.models import BrandIdentity
 from backend.app.logger import logger
+from backend.agents.prompt_crafter import PromptCraftingAgent
 
 
 class ImageGenerator:
@@ -29,6 +30,10 @@ class ImageGenerator:
         self.downloads_dir = Path("generated_images")
         self.downloads_dir.mkdir(exist_ok=True)
         logger.info(f"Images will be saved to: {self.downloads_dir.absolute()}")
+        
+        # Initialize prompt crafting agent
+        self.prompt_crafter = PromptCraftingAgent()
+        logger.info("✓ Prompt Crafting Agent initialized")
         
         if api_key and genai:
             try:
@@ -69,8 +74,9 @@ class ImageGenerator:
     ) -> str:
         """Generate an image based on brand identity and user prompt."""
         
-        # Build prompt with brand style cues
-        style_prompt = self._build_style_prompt(brand_identity, user_prompt)
+        # Use the prompt crafting agent to intelligently craft the prompt
+        logger.info("Crafting image generation prompt with Prompt Crafting Agent...")
+        style_prompt = self.prompt_crafter.craft_prompt(brand_identity, user_prompt)
         
         if self.enabled:
             try:
