@@ -7,7 +7,7 @@ pydantic>=2.5.0
 # LangChain dependencies
 langchain>=0.1.0
 langchain-community>=0.0.10
-langchain-google-genai>=1.0.0,<2.0.0
+langchain-google-genai>=2.0.0
 
 # Google AI dependencies - use compatible versions
 google-generativeai>=0.8.0
