@@ -33,7 +33,12 @@ from backend.agents.tools import (
     ColorPaletteExtractor,
     VisionStyleAnalyzer
 )
-from backend.app.models import BrandIdentity, BrandDetails, ImageStyle, ColorPalette, ColorInfo, Metadata, SourcePage
+from backend.app.models import (
+    BrandIdentity, BrandCore, BrandPersonality, TargetAudience, PrimaryDemographics,
+    VisualIdentity, DesignStyle, ColorPalette, ColorInfo, Typography, ImageryStyle, GraphicElements,
+    BrandVoice, ImageGenerationGuidelines, PeopleRepresentation, Environment, PropsAndObjects,
+    MoodAndEmotion, TechnicalSpecs, ContentThemes, SourcePage
+)
 
 
 class BrandExtractionAgent:
@@ -138,150 +143,152 @@ class BrandExtractionAgent:
         return None
     
     def extract(self, url: str) -> BrandIdentity:
-        """Extract brand identity from a website URL."""
-        source_pages = []
+        """Extract brand identity from a website URL by crawling multiple pages."""
         
-        # Step 1: Scrape the main website
-        print(f"Scraping website: {url}")
-        scraped_data = self.web_scraper.scrape(url)
+        # Step 1: Crawl multiple pages from the website
+        print(f"\n{'='*60}")
+        print(f"🌐 STARTING BRAND EXTRACTION")
+        print(f"{'='*60}")
+        all_pages = self.web_scraper.crawl_website(url, max_pages=5)
         
-        # Check if we got useful data
-        if scraped_data.get('error'):
-            print(f"Warning: Scraping error: {scraped_data.get('error')}")
-        title = scraped_data.get('title', '').lower()
-        if not title or title in ['just a moment', 'checking your browser', 'please wait']:
-            print("Warning: May have hit a protection page. Consider installing Playwright browsers:")
-            print("  uv run playwright install chromium")
+        if not all_pages:
+            print("⚠ No pages could be scraped. Using fallback extraction.")
+            return self._fallback_extraction({})
         
-        source_pages.append(SourcePage(
-            url=url,
-            used_for=["mission", "vision", "palette", "style"]
-        ))
+        # Aggregate data from all pages
+        aggregated_data = {
+            'pages': all_pages,
+            'combined_text': '',
+            'combined_titles': [],
+            'combined_descriptions': [],
+            'all_images': [],
+            'all_html': ''
+        }
         
-        # Step 2: Extract color palette from website CSS and images
+        for page in all_pages:
+            aggregated_data['combined_text'] += '\n\n' + page.get('text', '')
+            aggregated_data['combined_titles'].append(page.get('title', ''))
+            aggregated_data['combined_descriptions'].append(page.get('description', ''))
+            aggregated_data['all_images'].extend(page.get('images', []))
+            aggregated_data['all_html'] += '\n' + page.get('html', '')
+        
+        # Use homepage as primary data source
+        homepage = all_pages[0] if all_pages else {}
+        
+        # Step 2: Extract color palette from all pages
         print("\n" + "="*60)
         print("🎨 EXTRACTING COLOR PALETTE")
         print("="*60)
         colors = []
         
-        # First, extract colors from CSS/styles (background, text, brand colors)
-        html_content = scraped_data.get('html', '')
-        if html_content:
-            try:
-                # Extract from CSS
-                css_colors = self.color_extractor.extract_from_css(html_content)
-                if css_colors:
-                    colors.extend(css_colors)
-                    print(f"\n✓ Extracted {len(css_colors)} colors from CSS/HTML")
-                else:
-                    print(f"\n⚠ No colors found from CSS/HTML")
-            except Exception as e:
-                print(f"❌ Error extracting colors from CSS: {e}")
+        # Extract colors from all pages' HTML
+        for page in all_pages:
+            html_content = page.get('html', '')
+            if html_content:
+                try:
+                    css_colors = self.color_extractor.extract_from_css(html_content)
+                    if css_colors:
+                        colors.extend(css_colors)
+                except Exception as e:
+                    print(f"  Error extracting colors from {page.get('url', 'unknown')}: {e}")
         
-        # Add computed colors from Playwright if available
-        if scraped_data.get('background_color'):
-            bg_hex = self.color_extractor._parse_color_value(scraped_data['background_color'])
-            if bg_hex:
-                colors.append({
-                    'name': 'background',
-                    'hex': bg_hex,
-                    'source': 'computed_background'
-                })
-        if scraped_data.get('text_color'):
-            text_hex = self.color_extractor._parse_color_value(scraped_data['text_color'])
-            if text_hex:
-                colors.append({
-                    'name': 'text',
-                    'hex': text_hex,
-                    'source': 'computed_text'
-                })
+        # Deduplicate colors
+        seen_hex = set()
+        unique_colors = []
+        for color in colors:
+            hex_upper = color.get('hex', '').upper()
+            if hex_upper and hex_upper not in seen_hex:
+                seen_hex.add(hex_upper)
+                unique_colors.append(color)
+        colors = unique_colors[:20]  # Keep top 20 unique colors
         
-        # Also extract colors from images (for additional brand colors)
-        if scraped_data.get('images') and len(colors) < 5:  # Only if we don't have enough colors
-            try:
-                # Try to extract colors from first few images
-                for img in scraped_data.get('images', [])[:2]:
-                    try:
-                        img_colors = self.color_extractor.extract_from_url(img['url'])
-                        colors.extend(img_colors)
-                    except Exception as e:
-                        print(f"Error extracting colors from {img['url']}: {e}")
-            except Exception as e:
-                print(f"Error extracting colors from images: {e}")
+        print(f"✓ Extracted {len(colors)} unique colors across all pages")
         
-        # Step 3: Analyze visual style
-        print("Analyzing visual style...")
-        image_urls = [img['url'] for img in scraped_data.get('images', [])[:5]]
-        style_analysis = self.vision_analyzer.analyze(image_urls)
+        # Step 3: Analyze visual style from images
+        print("\n📸 Analyzing visual style from images...")
+        all_image_urls = [img['url'] for page in all_pages for img in page.get('images', [])[:3]]
+        style_analysis = self.vision_analyzer.analyze(all_image_urls[:10])
         
         # Step 4: Search for additional brand information
-        print("Searching for additional brand info...")
-        brand_name = scraped_data.get('title', '').split('|')[0].split('-')[0].strip()
+        print("\n🔍 Searching for additional brand info...")
+        brand_name = homepage.get('title', '').split('|')[0].split('-')[0].strip()
         if brand_name:
-            search_results = self.search_tool.search(f"{brand_name} brand mission vision")
+            search_results = self.search_tool.search(f"{brand_name} brand mission vision values")
         else:
             search_results = []
         
-        # Step 5: Use LLM to generate structured brand identity with intelligent analysis
+        # Step 5: Use LLM to generate comprehensive brand identity
         print("\n" + "="*60)
         print("🤖 ANALYZING WITH LLM")
         print("="*60)
         brand_identity = self._generate_brand_identity(
-            scraped_data=scraped_data,
+            all_pages=all_pages,
+            aggregated_data=aggregated_data,
             search_results=search_results,
             colors=colors,
             style_analysis=style_analysis
         )
         
-        # If LLM is not available, use enhanced fallback
-        if not self.llm:
-            print("⚠ LLM not available, using enhanced fallback extraction...")
+        # Add source pages metadata
+        source_pages = [
+            SourcePage(url=page.get('url', ''), page_type=page.get('page_type', 'other'))
+            for page in all_pages
+        ]
+        brand_identity.source_pages = source_pages
         
-        # Add metadata
-        brand_identity.metadata.source_pages = source_pages
-        
-        # Log final extracted colors
+        # Log final extracted brand identity
         print("\n" + "="*60)
         print("📊 FINAL BRAND IDENTITY EXTRACTED")
         print("="*60)
-        print(f"Brand Name: {brand_identity.brand_details.brand_name}")
-        print(f"Personality: {', '.join(brand_identity.brand_details.brand_personality)}")
-        print("\nColor Palette:")
-        cp = brand_identity.image_style.color_palette
-        if cp.background:
-            print(f"  Background: {cp.background.hex} ({cp.background.name})")
+        print(f"Brand Name: {brand_identity.brand_core.brand_name}")
+        print(f"Industry: {brand_identity.brand_core.industry}")
+        print(f"Personality Traits: {', '.join(brand_identity.brand_core.brand_personality.traits)}")
+        print(f"\nColor Palette:")
+        cp = brand_identity.visual_identity.color_palette
         if cp.primary:
             print(f"  Primary: {cp.primary.hex} ({cp.primary.name})")
         if cp.secondary:
             print(f"  Secondary: {cp.secondary.hex} ({cp.secondary.name})")
-        if cp.support_1:
-            print(f"  Support 1: {cp.support_1.hex} ({cp.support_1.name})")
-        if cp.support_2:
-            print(f"  Support 2: {cp.support_2.hex} ({cp.support_2.name})")
-        if cp.support_3:
-            print(f"  Support 3: {cp.support_3.hex} ({cp.support_3.name})")
-        if cp.positive:
-            print(f"  Positive: {cp.positive.hex} ({cp.positive.name})")
+        if cp.accent:
+            print(f"  Accent: {cp.accent.hex} ({cp.accent.name})")
+        print(f"\nSource Pages: {len(brand_identity.source_pages)} pages crawled")
         print("="*60 + "\n")
         
         return brand_identity
     
     def _generate_brand_identity(
         self,
-        scraped_data: Dict[str, Any],
+        all_pages: List[Dict[str, Any]],
+        aggregated_data: Dict[str, Any],
         search_results: List[Dict[str, str]],
         colors: List[Dict[str, str]],
         style_analysis: Dict[str, Any]
     ) -> BrandIdentity:
-        """Generate Brand Identity JSON using LLM reasoning."""
+        """Generate comprehensive Brand Identity JSON using LLM reasoning from multiple pages."""
         
-        # Prepare context for LLM
+        # Prepare context for LLM from all pages
+        homepage = all_pages[0] if all_pages else {}
+        
+        # Combine text from all pages (limit to 5000 chars for LLM)
+        combined_text = aggregated_data.get('combined_text', '')[:5000]
+        
+        # Create page summaries
+        page_summaries = []
+        for page in all_pages:
+            page_summaries.append({
+                'url': page.get('url', ''),
+                'type': page.get('page_type', 'other'),
+                'title': page.get('title', ''),
+                'text_preview': page.get('text', '')[:300]
+            })
+        
         context = {
-            'website_title': scraped_data.get('title', ''),
-            'website_description': scraped_data.get('description', ''),
-            'website_text': scraped_data.get('text', '')[:2000],  # Limit text
+            'homepage_title': homepage.get('title', ''),
+            'homepage_description': homepage.get('description', ''),
+            'combined_text': combined_text,
+            'page_summaries': page_summaries,
             'search_results': search_results[:3],
-            'colors': colors[:7],
+            'colors': colors[:15],
             'style_analysis': style_analysis
         }
         
@@ -333,105 +340,24 @@ class BrandExtractionAgent:
         return brand_json
     
     def _create_extraction_prompt(self, context: Dict[str, Any]) -> str:
-        """Create prompt for brand extraction with intelligent inference."""
-        return f"""You are an expert brand identity analyst. Your task is to analyze the provided website content and intelligently extract a comprehensive brand identity. You must INFER and ANALYZE brand characteristics even if they are not explicitly stated.
-
-IMPORTANT: Use your analytical skills to infer brand values, personality, vision, and style from the overall content, tone, messaging, and visual elements. Don't just look for explicit statements - analyze what the brand communicates through its content.
-
-Website Data:
-Title: {context['website_title']}
-Description: {context['website_description']}
-Content Excerpt: {context['website_text']}
-
-Additional Context:
-Search Results: {json.dumps(context['search_results'], indent=2)}
-Extracted Colors: {json.dumps(context['colors'], indent=2)}
-Style Analysis: {json.dumps(context['style_analysis'], indent=2)}
-
-ANALYSIS INSTRUCTIONS:
-
-1. **Brand Name**: Extract the clean brand name (remove taglines, remove "|", "-", etc.)
-
-2. **Brand Mission**: Analyze the content to infer the brand's mission. Look for:
-   - What problem they solve
-   - Who they serve
-   - What value they provide
-   - Their core purpose
-   If not explicit, synthesize from their messaging and value propositions.
-
-3. **Brand Vision**: Infer the brand's vision by analyzing:
-   - Future aspirations mentioned
-   - Long-term goals
-   - What they want to achieve
-   - Their ideal future state
-   Synthesize from content even if not explicitly stated as "vision".
-
-4. **Brand Personality**: Analyze the tone, language, and messaging to infer personality traits:
-   - Professional, friendly, innovative, trustworthy, bold, creative, etc.
-   - Extract 3-5 traits that best describe the brand's character
-   - Base this on how they communicate, not just explicit mentions
-
-5. **Image Style**: Analyze the brand's visual identity:
-   - Style: modern, minimalist, bold, elegant, playful, etc.
-   - Keywords: Extract relevant style keywords from content
-   - Temperature: warm, cool, or neutral based on color palette and tone
-   - People/Ethnicity: Infer from content if they show diverse representation
-   - Occupation: What types of people/roles are featured or implied
-   - Props: What objects/elements are associated with the brand
-   - Environment: What settings/contexts are shown or implied
-
-6. **Color Palette**: Use the extracted colors and assign them meaningfully:
-   CRITICAL RULES:
-   - ONLY include colors that are CLEARLY present and identifiable
-   - PRIMARY and BACKGROUND are most important - these should almost always be present
-   - Support colors (support_1, support_2, support_3) are OPTIONAL - only include if clearly distinct brand colors exist
-   - If you can only find 1-2 colors, that's perfectly fine! Don't force colors that don't exist.
-   
-   Color assignment priority:
-   1. **Background**: The main page background color (often white, black, or a neutral tone)
-   2. **Primary**: THE most prominent brand color (buttons, CTAs, links, headers - the color that defines the brand)
-   3. **Secondary**: Secondary brand color (if clearly present and distinct from primary)
-   4. **Support_1/2/3**: ONLY if there are additional, clearly distinct brand colors
-   5. **Positive**: Color for positive actions (often green/blue, but ONLY if identifiable)
-   
-   Examples:
-   - Minimal: Only background + primary → That's perfectly valid!
-   - Typical: background + primary + secondary → Most common case
-   - Rich: background + primary + secondary + 1-2 support colors → Only for color-rich brands
-   
-   DO NOT fill in colors just to complete the schema. Empty/null is better than incorrect.
-
-Return a complete Brand Identity JSON:
-{{
-  "brand_details": {{
-    "brand_name": "clean brand name only",
-    "brand_mission": "inferred mission statement based on content analysis",
-    "brand_vision": "inferred vision statement based on content analysis",
-    "brand_personality": ["trait1", "trait2", "trait3", "trait4"]
-  }},
-  "image_style": {{
-    "style": "inferred visual style",
-    "keywords": ["keyword1", "keyword2", "keyword3"],
-    "temperature": "warm|cool|neutral",
-    "people_ethnicity": "diverse|specific|not specified",
-    "occupation": ["occupation1", "occupation2"],
-    "props": ["prop1", "prop2"],
-    "environment": ["env1", "env2"],
-    "color_palette": {{
-      "background": {{"name": "color name", "hex": "#hexcode"}},
-      "primary": {{"name": "color name", "hex": "#hexcode"}},
-      "secondary": {{"name": "color name", "hex": "#hexcode"}} or null,
-      "support_1": {{"name": "color name", "hex": "#hexcode"}} or null (only if exists),
-      "support_2": {{"name": "color name", "hex": "#hexcode"}} or null (only if exists),
-      "support_3": {{"name": "color name", "hex": "#hexcode"}} or null (only if exists),
-      "positive": {{"name": "color name", "hex": "#hexcode"}} or null (only if identifiable)
-    }}
-    
-REMINDER: It's BETTER to have null/empty support colors than to make up colors that don't exist!
-  }}
-}}
-
-CRITICAL: Return ONLY valid JSON. No markdown, no explanations, no additional text. Just the JSON object."""
+        """Create comprehensive prompt for brand extraction matching new schema."""
+        from backend.agents.prompt_template import COMPREHENSIVE_EXTRACTION_PROMPT
+        
+        # Format page summaries
+        page_summaries_str = "\n".join([
+            f"  - {p['type']}: {p['url']} - {p['title'][:50]}"
+            for p in context.get('page_summaries', [])
+        ])
+        
+        return COMPREHENSIVE_EXTRACTION_PROMPT.format(
+            homepage_title=context.get('homepage_title', ''),
+            homepage_description=context.get('homepage_description', ''),
+            combined_text=context.get('combined_text', '')[:3000],  # Limit for LLM
+            page_summaries=page_summaries_str,
+            search_results=json.dumps(context.get('search_results', []), indent=2),
+            colors=json.dumps(context.get('colors', []), indent=2),
+            style_analysis=json.dumps(context.get('style_analysis', {}), indent=2)
+        )
 
     def _parse_llm_response(self, response: str) -> BrandIdentity:
         """Parse LLM response into BrandIdentity model."""
@@ -450,19 +376,16 @@ CRITICAL: Return ONLY valid JSON. No markdown, no explanations, no additional te
             data = json.loads(response)
             
             # Ensure color palette fields are properly formatted (handle None values)
-            if 'image_style' in data and 'color_palette' in data['image_style']:
-                color_palette = data['image_style']['color_palette']
+            if 'visual_identity' in data and 'color_palette' in data['visual_identity']:
+                color_palette = data['visual_identity']['color_palette']
                 # Convert None/invalid values - keep them as None (optional fields)
-                for key in ['background', 'primary', 'secondary', 'support_1', 'support_2', 'support_3', 'positive']:
+                for key in ['primary', 'secondary', 'accent']:
                     if key in color_palette:
                         if color_palette[key] is None:
-                            # Keep as None
                             continue
                         elif not isinstance(color_palette[key], dict):
-                            # Invalid format, set to None
                             color_palette[key] = None
                         elif not color_palette[key].get('hex'):
-                            # Empty hex, set to None
                             color_palette[key] = None
             
             return BrandIdentity(**data)
@@ -650,19 +573,27 @@ CRITICAL: Return ONLY valid JSON. No markdown, no explanations, no additional te
             # Limit to 5 most relevant traits
             personality = personality[:5]
         
-        # Create brand identity
+        # Create brand identity with new schema
         brand_identity = BrandIdentity(
-            brand_details=BrandDetails(
+            brand_core=BrandCore(
                 brand_name=brand_name,
                 brand_mission=mission or "Mission statement not found",
                 brand_vision=vision or "Vision statement not found",
-                brand_personality=personality[:5]  # Limit to 5 traits
+                brand_personality=BrandPersonality(
+                    traits=personality[:5]  # Limit to 5 traits
+                )
             ),
-            image_style=ImageStyle(
-                style=context.get('style_analysis', {}).get('style', 'modern'),
-                keywords=["brand", "professional", "modern"],
-                temperature="warm",
+            visual_identity=VisualIdentity(
+                design_style=DesignStyle(
+                    overall_aesthetic=context.get('style_analysis', {}).get('style', 'modern'),
+                    keywords=["brand", "professional", "modern"]
+                ),
                 color_palette=color_palette
+            ),
+            image_generation_guidelines=ImageGenerationGuidelines(
+                technical_specs=TechnicalSpecs(
+                    color_temperature="warm"
+                )
             )
         )
         

@@ -173,8 +173,9 @@ class ImageGenerator:
         Returns:
             A comprehensive prompt for image generation
         """
-        brand = brand_identity.brand_details
-        style = brand_identity.image_style
+        brand_core = brand_identity.brand_core
+        visual_identity = brand_identity.visual_identity
+        image_guidelines = brand_identity.image_generation_guidelines
         
         # === SECTION 1: CORE CONTENT (User's Request) ===
         # Start with what the user wants - this is the main subject
@@ -182,52 +183,57 @@ class ImageGenerator:
         
         # === SECTION 2: VISUAL PERSONALITY ===
         # Convert brand personality to visual/aesthetic descriptors
-        if brand.brand_personality:
-            visual_traits = self._personality_to_visual(brand.brand_personality)
+        if brand_core.brand_personality and brand_core.brand_personality.traits:
+            visual_traits = self._personality_to_visual(brand_core.brand_personality.traits)
             if visual_traits:
                 prompt_parts.append(f"Visual style: {', '.join(visual_traits)} aesthetic")
         
         # === SECTION 3: ARTISTIC STYLE ===
         # Overall artistic direction from the brand
-        if style.style:
-            prompt_parts.append(f"Art direction: {style.style} style")
+        design_style = visual_identity.design_style
+        if design_style.overall_aesthetic:
+            prompt_parts.append(f"Art direction: {design_style.overall_aesthetic} style")
         
         # Visual keywords (filtered to remove brand-specific terms)
-        if style.keywords:
-            visual_keywords = [kw for kw in style.keywords 
+        if design_style.keywords:
+            visual_keywords = [kw for kw in design_style.keywords 
                              if kw.lower() not in ['brand', 'logo', 'company', 'trademark']]
             if visual_keywords:
                 prompt_parts.append(f"Visual theme: {', '.join(visual_keywords)}")
         
         # === SECTION 4: COLOR PALETTE (Most Important for Brand Matching) ===
-        color_instruction = self._build_color_instruction(style.color_palette)
+        color_instruction = self._build_color_instruction(visual_identity.color_palette)
         if color_instruction:
             prompt_parts.append(color_instruction)
         
         # Color temperature for overall mood
-        if style.temperature:
+        tech_specs = image_guidelines.technical_specs
+        if tech_specs.color_temperature:
             temp_desc = {
                 'warm': 'warm, inviting tones',
                 'cool': 'cool, professional tones',
                 'neutral': 'balanced, neutral tones'
-            }.get(style.temperature.lower(), style.temperature)
+            }.get(tech_specs.color_temperature.lower(), tech_specs.color_temperature)
             prompt_parts.append(f"Color mood: {temp_desc}")
         
         # === SECTION 5: COMPOSITION & ENVIRONMENT ===
         # Setting and environment
-        if style.environment:
-            prompt_parts.append(f"Environment: {', '.join(style.environment)}")
+        env = image_guidelines.environment
+        if env.primary_settings:
+            prompt_parts.append(f"Environment: {', '.join(env.primary_settings)}")
         
         # Props and objects
-        if style.props:
-            prompt_parts.append(f"Include elements: {', '.join(style.props)}")
+        props = image_guidelines.props_and_objects
+        if props.common_items:
+            prompt_parts.append(f"Include elements: {', '.join(props.common_items)}")
         
         # === SECTION 6: PEOPLE REPRESENTATION ===
-        if style.occupation:
-            prompt_parts.append(f"Featuring: {', '.join(style.occupation)}")
+        people = image_guidelines.people_representation
+        if people.featured_occupations:
+            prompt_parts.append(f"Featuring: {', '.join(people.featured_occupations)}")
         
-        if style.people_ethnicity:
-            prompt_parts.append(f"People: {style.people_ethnicity}")
+        if people.ethnicity_inclusion:
+            prompt_parts.append(f"People: {', '.join(people.ethnicity_inclusion)}")
         
         # === SECTION 7: QUALITY & CONSISTENCY ===
         # Combine all parts into a cohesive prompt
@@ -242,7 +248,8 @@ class ImageGenerator:
         
         logger.debug(f"Generated prompt template breakdown:")
         logger.debug(f"  User content: {user_prompt}")
-        logger.debug(f"  Visual style: {visual_traits if brand.brand_personality else 'none'}")
+        visual_traits_list = visual_traits if (brand_core.brand_personality and brand_core.brand_personality.traits) else []
+        logger.debug(f"  Visual style: {visual_traits_list if visual_traits_list else 'none'}")
         logger.debug(f"  Color palette: {color_instruction}")
         
         return full_prompt

@@ -92,7 +92,7 @@ class WebScraper:
         return False
     
     def scrape(self, url: str) -> Dict[str, Any]:
-        """Scrape a website and extract text content, images, and metadata."""
+        """Scrape a single page and extract text content, images, and metadata."""
         # Always try Playwright first if available (handles JS and protection pages)
         if self.use_playwright:
             try:
@@ -141,6 +141,160 @@ class WebScraper:
                 print("WARNING: Detected protection page (e.g., Cloudflare).")
                 print("Install Playwright to bypass: uv run playwright install chromium")
             return result
+    
+    def crawl_website(self, base_url: str, max_pages: int = 5) -> List[Dict[str, Any]]:
+        """
+        Crawl multiple pages from a website.
+        
+        Visits:
+        - Homepage (base_url)
+        - About page (/about, /about-us, etc.)
+        - Products/Services page (/products, /services, etc.)
+        - Blog page (/blog, /news, etc.)
+        
+        Args:
+            base_url: Base website URL
+            max_pages: Maximum number of pages to crawl (default: 5)
+            
+        Returns:
+            List of scraped page data, each with 'url' and page content
+        """
+        from urllib.parse import urljoin, urlparse
+        
+        print(f"\n{'='*60}")
+        print(f"🌐 CRAWLING WEBSITE: {base_url}")
+        print(f"{'='*60}")
+        
+        parsed_base = urlparse(base_url)
+        base_domain = f"{parsed_base.scheme}://{parsed_base.netloc}"
+        
+        # Common page paths to look for
+        common_paths = [
+            ('', 'homepage'),
+            ('/about', 'about'),
+            ('/about-us', 'about'),
+            ('/aboutus', 'about'),
+            ('/products', 'products'),
+            ('/product', 'products'),
+            ('/services', 'products'),
+            ('/service', 'products'),
+            ('/blog', 'blog'),
+            ('/blogs', 'blog'),
+            ('/news', 'blog'),
+            ('/articles', 'blog'),
+            ('/contact', 'other'),
+            ('/contact-us', 'other'),
+        ]
+        
+        pages_to_scrape = []
+        visited_urls = set()
+        
+        # First, scrape homepage to find additional links
+        print(f"\n📄 Step 1: Scraping homepage...")
+        homepage_data = self.scrape(base_url)
+        if homepage_data:
+            homepage_data['page_type'] = 'homepage'
+            pages_to_scrape.append(homepage_data)
+            visited_urls.add(base_url.rstrip('/'))
+        
+        # Extract links from homepage
+        all_links = homepage_data.get('links', []) if homepage_data else []
+        
+        # Try common paths
+        print(f"\n📄 Step 2: Finding and scraping key pages...")
+        for path, page_type in common_paths:
+            if len(pages_to_scrape) >= max_pages:
+                break
+                
+            test_url = urljoin(base_url, path)
+            test_url_clean = test_url.rstrip('/')
+            
+            # Skip if already visited
+            if test_url_clean in visited_urls:
+                continue
+            
+            # Check if this URL exists in the links we found
+            url_matches = any(
+                test_url_clean in link or link in test_url_clean 
+                for link in all_links
+            )
+            
+            # Try to scrape this page
+            try:
+                print(f"  Trying: {test_url}")
+                page_data = self.scrape(test_url)
+                
+                # Check if we got valid content (not 404, not empty)
+                if page_data and page_data.get('title') and not self._is_protection_page(
+                    page_data.get('title', ''), page_data.get('text', '')
+                ):
+                    # Check if content is meaningful (not just error pages)
+                    text_length = len(page_data.get('text', ''))
+                    if text_length > 100:  # At least 100 chars of content
+                        page_data['page_type'] = page_type
+                        pages_to_scrape.append(page_data)
+                        visited_urls.add(test_url_clean)
+                        print(f"    ✓ Found {page_type} page ({text_length} chars)")
+                    else:
+                        print(f"    ✗ Page too short ({text_length} chars)")
+                else:
+                    print(f"    ✗ Page not accessible or empty")
+            except Exception as e:
+                print(f"    ✗ Error: {e}")
+                continue
+        
+        # If we still need more pages, try links from homepage
+        if len(pages_to_scrape) < max_pages and all_links:
+            print(f"\n📄 Step 3: Exploring additional pages from homepage links...")
+            for link in all_links[:10]:  # Try first 10 links
+                if len(pages_to_scrape) >= max_pages:
+                    break
+                
+                # Only follow internal links
+                parsed_link = urlparse(link)
+                if parsed_link.netloc and parsed_link.netloc != parsed_base.netloc:
+                    continue
+                
+                link_clean = link.rstrip('/')
+                if link_clean in visited_urls:
+                    continue
+                
+                # Skip common non-content pages
+                skip_patterns = ['/login', '/signup', '/register', '/cart', '/checkout', 
+                               '/account', '/profile', '/search', '/tag/', '/category/']
+                if any(pattern in link.lower() for pattern in skip_patterns):
+                    continue
+                
+                try:
+                    print(f"  Trying: {link}")
+                    page_data = self.scrape(link)
+                    
+                    if page_data and page_data.get('title') and len(page_data.get('text', '')) > 200:
+                        # Determine page type from URL
+                        link_lower = link.lower()
+                        if 'about' in link_lower:
+                            page_type = 'about'
+                        elif any(x in link_lower for x in ['product', 'service', 'shop']):
+                            page_type = 'products'
+                        elif any(x in link_lower for x in ['blog', 'news', 'article', 'post']):
+                            page_type = 'blog'
+                        else:
+                            page_type = 'other'
+                        
+                        page_data['page_type'] = page_type
+                        pages_to_scrape.append(page_data)
+                        visited_urls.add(link_clean)
+                        print(f"    ✓ Found {page_type} page")
+                except Exception as e:
+                    continue
+        
+        print(f"\n{'='*60}")
+        print(f"✓ Crawled {len(pages_to_scrape)} pages:")
+        for i, page in enumerate(pages_to_scrape, 1):
+            print(f"  {i}. {page.get('url', 'unknown')} ({page.get('page_type', 'unknown')})")
+        print(f"{'='*60}\n")
+        
+        return pages_to_scrape
     
     def _scrape_with_playwright(self, url: str, wait_time: int = 3000) -> Dict[str, Any]:
         """Scrape using Playwright (handles JavaScript-rendered content)."""
