@@ -262,7 +262,16 @@ with col2:
                         
                         # Use st.image with bytes (most reliable method)
                         st.image(image_bytes, caption="Generated Image", width='stretch')
-                        st.success("✅ Image displayed successfully! (Also saved to backend/generated_images/)")
+                        
+                        # Add download button for data URL images
+                        st.download_button(
+                            label="📥 Download Image",
+                            data=image_bytes,
+                            file_name=f"generated_image_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png",
+                            mime="image/png",
+                            type="primary"
+                        )
+                        st.success("✅ Image displayed successfully!")
                     except Exception as decode_error:
                         st.error(f"Error decoding image: {str(decode_error)}")
                         st.info("Attempting fallback display method...")
@@ -275,6 +284,22 @@ with col2:
                 else:
                     # For regular URLs, use st.image
                     st.image(image_url, caption="Generated Image", width='stretch')
+                    
+                    # Add download button for regular URLs
+                    try:
+                        # Fetch the image to get bytes for download
+                        img_response = requests.get(image_url, timeout=10)
+                        if img_response.status_code == 200:
+                            st.download_button(
+                                label="📥 Download Image",
+                                data=img_response.content,
+                                file_name=f"generated_image_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png",
+                                mime="image/png",
+                                type="primary"
+                            )
+                    except Exception as download_error:
+                        st.warning(f"Could not prepare download button: {str(download_error)}")
+                    
                     st.success("✅ Image displayed successfully!")
             except Exception as e:
                 st.error(f"Error displaying image: {str(e)}")
