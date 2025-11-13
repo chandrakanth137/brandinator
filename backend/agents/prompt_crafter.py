@@ -71,7 +71,6 @@ class PromptCraftingAgent:
                         temperature=0.8,
                         google_api_key=api_key
                     )
-                    logger.info("✓ Prompt Crafting Agent: Google Gemini LLM (gemini-2.5-flash) initialized")
                     return llm
                 except Exception as e:
                     logger.warning(f"⚠ Google Gemini LLM failed: {e}")

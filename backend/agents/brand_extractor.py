@@ -50,7 +50,6 @@ class BrandExtractionAgent:
                         temperature=0.7,
                         google_api_key=api_key
                     )
-                    print("✓ Google Gemini LLM (gemini-2.5-flash) initialized successfully")
                     return llm
                 except Exception as e:
                     print(f"⚠ Google Gemini LLM failed: {e}")

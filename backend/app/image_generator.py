@@ -27,10 +27,8 @@ class ImageGenerator:
         
         self.downloads_dir = Path("generated_images")
         self.downloads_dir.mkdir(exist_ok=True)
-        logger.info(f"Images will be saved to: {self.downloads_dir.absolute()}")
         
         self.prompt_crafter = PromptCraftingAgent()
-        logger.info("✓ Prompt Crafting Agent initialized")
         
         if api_key and genai:
             try:
@@ -44,7 +42,6 @@ class ImageGenerator:
                 )
                 
                 self.enabled = True
-                logger.info("✓ Gemini 2.5 Flash image generation enabled (Nano Banana)")
             except Exception as e:
                 logger.error(f"✗ Error initializing Gemini: {e}", exc_info=True)
                 logger.error("=" * 60)

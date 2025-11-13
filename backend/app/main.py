@@ -19,18 +19,26 @@ app = FastAPI(
     version="0.1.0"
 )
 
-# Enable CORS for Streamlit frontend
+# CORS for Streamlit frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify exact origins
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Initialize agents
-brand_extractor = BrandExtractionAgent()
-image_generator = ImageGenerator()
+# Global agents (initialized on startup)
+brand_extractor = None
+image_generator = None
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize agents on startup."""
+    global brand_extractor, image_generator
+    brand_extractor = BrandExtractionAgent()
+    image_generator = ImageGenerator()
 
 
 @app.get("/")
@@ -52,6 +60,8 @@ async def health():
 @app.post("/extract", response_model=ExtractResponse)
 async def extract_brand(request: ExtractRequest):
     """Extract brand identity from a website URL."""
+    if brand_extractor is None:
+        raise HTTPException(status_code=503, detail="Service not ready")
     try:
         logger.info(f"Extracting brand from URL: {request.url}")
         brand_identity = brand_extractor.extract(request.url)
@@ -75,6 +85,8 @@ async def extract_brand(request: ExtractRequest):
 @app.post("/generate", response_model=GenerateResponse)
 async def generate_image(request: GenerateRequest):
     """Generate an on-brand image based on brand identity and user prompt."""
+    if image_generator is None:
+        raise HTTPException(status_code=503, detail="Service not ready")
     try:
         logger.info(f"Generating image with prompt: {request.user_prompt}")
         image_url = image_generator.generate(
@@ -100,7 +112,8 @@ def main():
         "backend.app.main:app",
         host="0.0.0.0",
         port=8000,
-        reload=True
+        reload=True,
+        log_level="warning"
     )
 
 

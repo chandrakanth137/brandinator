@@ -38,11 +38,8 @@ class WebScraper:
         
         if self.use_playwright:
             try:
-                # Initialize Playwright in a thread to avoid asyncio conflicts
-                print("Initializing Playwright...")
                 future = self.executor.submit(self._init_playwright)
                 future.result(timeout=15)
-                print("✓ Playwright initialized successfully")
             except Exception as e:
                 error_msg = str(e)
                 print(f"✗ Failed to initialize Playwright: {error_msg}")
@@ -963,7 +960,6 @@ class GoogleSearchTool:
                 # Initialize Playwright in a thread to avoid asyncio conflicts
                 future = self.executor.submit(self._init_playwright)
                 future.result(timeout=10)
-                print("GoogleSearchTool: Playwright initialized")
             except Exception as e:
                 print(f"GoogleSearchTool: Failed to initialize Playwright: {e}")
                 self.use_playwright = False
