@@ -56,8 +56,8 @@ async def extract_brand(request: ExtractRequest):
         logger.info(f"Extracting brand from URL: {request.url}")
         brand_identity = brand_extractor.extract(request.url)
         
-        # Collect source URLs
-        source_urls = [page.url for page in brand_identity.metadata.source_pages]
+        # Collect source URLs (source_pages is now at top level, not under metadata)
+        source_urls = [page.url for page in brand_identity.source_pages]
         logger.info(f"Brand extraction completed. Source URLs: {len(source_urls)}")
         
         return ExtractResponse(
